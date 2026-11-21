@@ -13,7 +13,7 @@ public final class ClipListModel {
             guard query != oldValue else { return }
             notice = nil
             selectedIndex = 0
-            reload()
+            reload(limit: pageSize)
         }
     }
 
@@ -23,7 +23,7 @@ public final class ClipListModel {
             guard filter != oldValue else { return }
             notice = nil
             selectedIndex = 0
-            reload()
+            reload(limit: pageSize)
         }
     }
 
@@ -31,27 +31,71 @@ public final class ClipListModel {
     /// when the selection moves or the query or filter changes.
     public var notice: String?
 
-    @ObservationIgnored private let store: ClipStore
-    @ObservationIgnored private let limit: Int
+    /// True while the last fetched page was full, so there may be more rows to load.
+    public private(set) var hasMore = false
 
-    public init(store: ClipStore, limit: Int = 50) {
+    public enum EscapeOutcome: Sendable, Equatable { case clearedQuery, close }
+
+    @ObservationIgnored private let store: ClipStore
+    @ObservationIgnored private let pageSize: Int
+    /// Start loading the next page when the selection is this close to the end of the loaded rows.
+    @ObservationIgnored private let prefetchDistance = 10
+
+    public init(store: ClipStore, pageSize: Int = 100) {
         self.store = store
-        self.limit = limit
-        reload()
+        self.pageSize = pageSize
+        reload(limit: pageSize)
     }
 
     public var selectedClip: StoredClip? {
         clips.indices.contains(selectedIndex) ? clips[selectedIndex] : nil
     }
 
-    /// Re-runs the current search (e.g. after a new copy) and keeps the selection in range.
+    /// Re-runs the current search (e.g. after a new copy) over every row loaded so far, so a refresh
+    /// never throws the user back to the first page. The selection stays on the same clip when it is still there.
     public func refresh() {
-        reload()
+        let id = selectedClip?.id
+        let lastLoadedID = clips.last?.id
+        let loaded = max(clips.count, pageSize)
+        // Ask for one row more than is loaded: when a new copy pushed the old last row down by one it shows
+        // up at the end, and we keep it so the list grows by that clip instead of silently dropping a row.
+        // In any other case the extra row is trimmed again.
+        reload(limit: loaded + 1)
+        if clips.count > loaded, clips.last?.id != lastLoadedID {
+            clips.removeLast(clips.count - loaded)
+        }
+        if let id, let index = clips.firstIndex(where: { $0.id == id }) { selectedIndex = index }
     }
 
-    /// All, then Text, then Links, then back to All.
-    public func cycleFilter() {
-        filter = filter.next
+    /// Appends the next page for the current query and filter. The selection does not move.
+    public func loadMore() {
+        guard hasMore else { return }
+        let page = (try? store.search(query, limit: pageSize, offset: clips.count, kind: filter.kind)) ?? []
+        clips.append(contentsOf: page)
+        hasMore = page.count == pageSize
+    }
+
+    /// All, then Text, then Links, then Images, then back to All (reversed for Shift-Tab).
+    public func cycleFilter(reverse: Bool = false) {
+        filter = reverse ? filter.previous : filter.next
+    }
+
+    /// Back to a fresh state each time the panel opens: no query, no filter, first page, top row.
+    public func resetForShow() {
+        notice = nil
+        // The observers below would reload on their own; do it once explicitly so a no-change reset
+        // still drops extra pages and the selection.
+        query = ""
+        filter = .all
+        selectedIndex = 0
+        reload(limit: pageSize)
+    }
+
+    /// Esc: the first press clears a non-empty query, the next one closes the panel.
+    public func escape() -> EscapeOutcome {
+        guard !query.isEmpty else { return .close }
+        query = ""
+        return .clearedQuery
     }
 
     /// Jumps to a row (used by ⌘1-9). Returns false, leaving the selection alone, when the row does not exist.
@@ -59,6 +103,7 @@ public final class ClipListModel {
     public func select(row: Int) -> Bool {
         guard clips.indices.contains(row) else { return false }
         selectedIndex = row
+        prefetchIfNearEnd()
         return true
     }
 
@@ -66,7 +111,7 @@ public final class ClipListModel {
     public func togglePinSelected() {
         guard let clip = selectedClip else { return }
         try? store.setPinned(id: clip.id, !clip.isPinned)
-        reload()
+        reloadLoaded()
         if let index = clips.firstIndex(where: { $0.id == clip.id }) { selectedIndex = index }
     }
 
@@ -75,7 +120,7 @@ public final class ClipListModel {
     public func deleteSelected() {
         guard let clip = selectedClip else { return }
         try? store.delete(id: clip.id)
-        reload()   // clamps the selection into range
+        reloadLoaded()   // clamps the selection into range
     }
 
     /// Moves the selection with the arrow keys, clamped to the list (no wrap-around). Clears any notice.
@@ -83,11 +128,41 @@ public final class ClipListModel {
         notice = nil
         guard !clips.isEmpty else { return }
         selectedIndex = min(max(selectedIndex + delta, 0), clips.count - 1)
+        prefetchIfNearEnd()
     }
 
-    private func reload() {
+    /// Home: first row.
+    public func moveToStart() {
+        notice = nil
+        selectedIndex = 0
+    }
+
+    /// End: last loaded row; more rows are requested when the history continues.
+    public func moveToEnd() {
+        notice = nil
+        guard !clips.isEmpty else { return }
+        selectedIndex = clips.count - 1
+        loadMore()
+    }
+
+    /// Page Up / Page Down: moves by a screenful of rows, clamped like `moveSelection`.
+    public func movePage(_ direction: Int, rowsPerPage: Int) {
+        moveSelection(by: direction * rowsPerPage)
+    }
+
+    private func prefetchIfNearEnd() {
+        if hasMore, selectedIndex >= clips.count - prefetchDistance { loadMore() }
+    }
+
+    private func reloadLoaded() {
+        reload(limit: max(clips.count, pageSize))
+    }
+
+    private func reload(limit: Int) {
         // A failing query shows an empty list instead of crashing the panel.
-        clips = (try? store.search(query, limit: limit, kind: filter.kind)) ?? []
+        clips = (try? store.search(query, limit: limit, offset: 0, kind: filter.kind)) ?? []
+        // A short page means the history is exhausted; the extra rows of a bigger reload count too.
+        hasMore = clips.count == limit
         selectedIndex = clips.isEmpty ? 0 : min(selectedIndex, clips.count - 1)
     }
 }

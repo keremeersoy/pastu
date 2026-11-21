@@ -58,6 +58,16 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// The filter Shift-Tab moves to, wrapping around to `.images`.
+    public var previous: ClipFilter {
+        switch self {
+        case .all: .images
+        case .text: .all
+        case .links: .text
+        case .images: .links
+        }
+    }
+
     /// The label shown on the filter chip.
     public var title: String {
         switch self {

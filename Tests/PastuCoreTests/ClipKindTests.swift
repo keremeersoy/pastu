@@ -65,4 +65,10 @@ import Testing
         #expect(ClipFilter.links.next == .images)
         #expect(ClipFilter.images.next == .all)
     }
+
+    @Test func previousIsTheInverseOfNext() {
+        for filter in ClipFilter.allCases {
+            #expect(filter.next.previous == filter)
+        }
+    }
 }

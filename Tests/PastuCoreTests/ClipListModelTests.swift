@@ -267,4 +267,139 @@ import Testing
         model.refresh()
         #expect(model.notice == "Ignoring Safari")
     }
+
+    // MARK: Paging and navigation
+
+    private func makeBigStore(_ count: Int) throws -> ClipStore {
+        try makeStore((0..<count).map { "clip \($0)" })
+    }
+
+    @Test func startsWithOnePage() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        #expect(model.clips.count == 100)
+        #expect(model.hasMore == true)
+    }
+
+    @Test func movingNearTheEndLoadsTheNextPage() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.moveSelection(by: 90)
+        #expect(model.clips.count == 200)
+        #expect(model.selectedIndex == 90)
+    }
+
+    @Test func loadMoreStopsAtTheEnd() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.loadMore()
+        model.loadMore()
+        #expect(model.clips.count == 250)
+        #expect(model.hasMore == false)
+        model.loadMore()
+        #expect(model.clips.count == 250)
+        #expect(model.hasMore == false)
+    }
+
+    @Test func refreshKeepsLoadedPagesAndSelectedClip() throws {
+        let store = try makeBigStore(250)
+        let model = ClipListModel(store: store)
+        model.loadMore()
+        #expect(model.clips.count == 200)
+        model.select(row: 150)
+        let id = model.selectedClip?.id
+        try store.insert(CapturedClip(text: "fresh", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 9999)))
+        model.refresh()
+        #expect(model.clips.count == 201)
+        #expect(model.selectedClip?.id == id)
+    }
+
+    @Test func deleteKeepsLoadedPages() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.loadMore()
+        model.select(row: 150)
+        model.deleteSelected()
+        #expect(model.clips.count >= 199)
+    }
+
+    @Test func queryChangeResetsPaging() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.loadMore()
+        model.moveSelection(by: 150)
+        model.query = "clip"
+        #expect(model.clips.count <= 100)
+        #expect(model.selectedIndex == 0)
+        model.loadMore()
+        model.filter = .text
+        #expect(model.clips.count <= 100)
+        #expect(model.selectedIndex == 0)
+    }
+
+    @Test func shortFirstPageMeansNoMore() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.query = "clip 24"
+        #expect(model.hasMore == false)
+    }
+
+    @Test func reverseCycleGoesAllImagesLinksTextAll() throws {
+        let model = ClipListModel(store: try makeStore(["a"]))
+        model.cycleFilter(reverse: true)
+        #expect(model.filter == .images)
+        model.cycleFilter(reverse: true)
+        #expect(model.filter == .links)
+        model.cycleFilter(reverse: true)
+        #expect(model.filter == .text)
+        model.cycleFilter(reverse: true)
+        #expect(model.filter == .all)
+    }
+
+    @Test func resetForShowClearsQueryFilterAndSelection() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.loadMore()
+        model.query = "clip"
+        model.filter = .text
+        model.moveSelection(by: 5)
+        model.notice = "Ignoring Safari"
+        model.resetForShow()
+        #expect(model.query == "")
+        #expect(model.filter == .all)
+        #expect(model.selectedIndex == 0)
+        #expect(model.notice == nil)
+        #expect(model.clips.count == 100)
+        #expect(model.hasMore == true)
+    }
+
+    @Test func escapeClearsQueryFirstThenCloses() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b"]))
+        model.query = "a"
+        #expect(model.escape() == .clearedQuery)
+        #expect(model.query == "")
+        #expect(model.escape() == .close)
+    }
+
+    @Test func moveToStartAndEnd() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.moveToEnd()
+        #expect(model.selectedIndex == 99)
+        #expect(model.clips.count == 200)   // hasMore, so the next page was requested
+        model.moveToStart()
+        #expect(model.selectedIndex == 0)
+    }
+
+    @Test func movePageClamps() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]))
+        model.movePage(1, rowsPerPage: 8)
+        #expect(model.selectedIndex == 8)
+        model.movePage(1, rowsPerPage: 8)
+        #expect(model.selectedIndex == 9)
+        model.select(row: 3)
+        model.movePage(-1, rowsPerPage: 8)
+        #expect(model.selectedIndex == 0)
+    }
+
+    @Test func movesClearTheNotice() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b", "c"]))
+        for move in [{ model.moveToEnd() }, { model.moveToStart() }, { model.movePage(1, rowsPerPage: 2) }] {
+            model.notice = "x"
+            move()
+            #expect(model.notice == nil)
+        }
+    }
 }
