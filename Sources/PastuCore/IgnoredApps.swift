@@ -5,7 +5,7 @@ import Foundation
 @MainActor
 public final class IgnoredApps {
     private let store: SettingsStore?
-    private static let key = "ignoredApps"
+    private static let key = DefaultsKeys.ignoredApps
 
     /// Called with the new set after every real change (not for no-ops).
     public var onChange: ((Set<String>) -> Void)?

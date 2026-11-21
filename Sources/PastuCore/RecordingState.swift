@@ -5,7 +5,7 @@ import Foundation
 @MainActor
 public final class RecordingState {
     private let store: SettingsStore?
-    private static let key = "recordingPaused"
+    private static let key = DefaultsKeys.recordingPaused
 
     public var isPaused: Bool {
         didSet { store?.set(isPaused, forKey: Self.key) }

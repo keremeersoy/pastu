@@ -23,3 +23,10 @@ public final class InMemorySettings: SettingsStore {
     public func stringArray(forKey key: String) -> [String]? { values[key] as? [String] }
     public func set(_ value: Any?, forKey key: String) { values[key] = value }
 }
+
+/// Every key Pastu stores in its `SettingsStore`, in one place. The strings are part of the on-disk format:
+/// changing one silently drops that setting for existing users (pinned by `DefaultsKeysTests`).
+enum DefaultsKeys {
+    static let recordingPaused = "recordingPaused"
+    static let ignoredApps = "ignoredApps"
+}
