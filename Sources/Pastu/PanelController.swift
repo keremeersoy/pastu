@@ -5,7 +5,7 @@ import SwiftUI
 /// Owns the panel: shows it centered on the screen with the mouse, hides it on Esc / Return / click-away.
 @MainActor
 final class PanelController: NSObject, NSWindowDelegate {
-    private static let size = NSSize(width: 640, height: 420)
+    private static let size = NSSize(width: PanelMetrics.size.width, height: PanelMetrics.size.height)
 
     private let model: ClipListModel
     private let onSelect: (StoredClip) -> Void
