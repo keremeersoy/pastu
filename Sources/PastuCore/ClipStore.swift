@@ -155,10 +155,13 @@ public final class ClipStore {
     private static func secureFile(at path: String) throws {
         let fm = FileManager.default
         do {
-            if fm.fileExists(atPath: path) {
-                try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
-            } else if !fm.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]) {
+            if !fm.fileExists(atPath: path),
+               !fm.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]) {
                 throw ClipStoreError(code: -1, message: "could not create \(path)")
+            }
+            // Also tighten sidecars left over from an older, looser run: SQLite never changes their mode.
+            for file in [path, path + "-wal", path + "-shm"] where fm.fileExists(atPath: file) {
+                try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file)
             }
         } catch let error as ClipStoreError {
             throw error

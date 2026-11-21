@@ -219,6 +219,22 @@ import Testing
         #expect(try permissions(of: path) == 0o600)
     }
 
+    @Test func liveLooseSidecarFilesAreTightenedWhenReopened() throws {
+        let path = NSTemporaryDirectory() + "pastu-perm-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+
+        // Simulates an app killed mid-session: the sidecars outlive it with whatever mode they had.
+        // The first connection stays open so SQLite keeps (rather than recreates) the -shm file.
+        let first = try ClipStore(path: path)
+        try first.insert(clip("data", at: 1))
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: path + "-shm")
+        #expect(try permissions(of: path + "-shm") == 0o644)
+
+        let second = try ClipStore(path: path)
+        #expect(try permissions(of: path + "-shm") == 0o600)
+        _ = (first, second)
+    }
+
     @Test func walSidecarFilesAreOwnerOnlyToo() throws {
         let path = NSTemporaryDirectory() + "pastu-perm-\(UUID().uuidString).sqlite"
         defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
