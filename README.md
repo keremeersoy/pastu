@@ -1,158 +1,97 @@
-# Pastu
+<p align="center">
+  <img src="docs/images/icon.png" width="96" height="96" alt="Pastu icon">
+</p>
 
-A fast, local-first, privacy-focused clipboard manager for macOS. Open source (MIT), free, no subscription,
-no network access.
+<h1 align="center">Pastu</h1>
 
-> **Status: early prototype (v0.1).** It captures text and pictures, searches them and pastes them back.
-> Builds are **not signed or notarized** by Apple yet, so macOS warns on first launch (see
-> [Installing](#installing-a-release)). Expect rough edges; bug reports are welcome.
+<p align="center">
+  A fast, private clipboard manager for macOS.<br>
+  Free and open source. Everything stays on your Mac.
+</p>
 
-<!-- SCREENSHOT PLACEHOLDER: replace with a real screenshot or GIF of the panel (light and dark mode).
-     Automated window captures do not render the Liquid Glass shell, so none is included on purpose. -->
-> 📷 **Screenshot coming soon.** No screenshot yet: automated captures cannot show the real Liquid Glass panel,
-> and we would rather show nothing than something misleading.
+<p align="center">
+  <img src="docs/images/panel.png" width="760" alt="The Pastu panel: clipboard history on the left, a preview on the right">
+</p>
 
-## What works today
+Press **⌘⇧V**, type a few letters, hit **Return**. Pastu remembers what you copy (text and pictures) and pastes it
+back into the app you were using.
 
-- Menu bar app that records copied **text and pictures** (polls the pasteboard every 0.5 s). Files are not captured yet.
-  When a copy has both text and a picture (browsers, office apps), the text is kept.
-- **⌘⇧V** opens a floating panel (on the screen with the mouse) without stealing focus from the app you are typing in.
-  The shortcut is fixed for now. If another app already owns it, use "Show Pastu" in the menu bar menu.
-- Type to search: substring match anywhere in the text (SQLite FTS5 trigram index), case- and accent-insensitive.
-  Every word must match. Words shorter than 3 characters are matched without the index and are only
-  case-insensitive for ASCII letters.
-- ↑ ↓ to select, **Return** to paste, **⌘1–⌘9** to paste a row directly, **⌘P** to pin or unpin,
-  **⌘⌫** to delete the selected clip from the history (pinned ones too), **⌘I** to ignore the selected clip's
-  source app, **Esc** to close.
-- Pinned clips stay on top and are never deleted automatically.
-- Two-pane panel: list with source app and relative time, plus a preview of the selected clip.
-- **Tab** cycles the type filter above the list: All, Text, Links, Images (a link is a clip that is only one
-  http/https URL or a mailto address).
-- Pictures (screenshots, copied images) get a thumbnail in the list and a full preview with their size; Return
-  pastes the picture back. The same picture copied twice is merged into one clip.
-- Duplicate copies are merged and move to the top.
-- **Ignored apps**: press ⌘I on a clip and Pastu stops recording copies from its source app (and never reads
-  their content). The list is saved, and "Ignored apps" in the menu bar menu lets you stop ignoring one. This is best
-  effort: the source app is whichever app was frontmost when Pastu noticed the copy, so a very fast app switch
-  can be misattributed. Clips already recorded are kept; delete them with ⌘⌫.
-- Menu bar menu: **Pause recording** / **Resume recording** (the choice survives a relaunch; while paused Pastu does not
-  even look at the pasteboard) and **Clear history…** (asks first; pinned clips are kept).
-- History limits, whichever is hit first: 5,000 unpinned clips, 90 days, or about 200 MB in total (an estimate: the text
-  size times 4.5 for the search index, plus picture sizes). Pinned clips are never deleted by these limits.
-  Text over 1 MB and pictures over 10 MB are skipped.
+> **Early version (0.1).** It works for daily use, but expect rough edges. Builds are not notarized by Apple yet,
+> so macOS asks you to confirm the first launch (one extra click, explained below).
 
-Not there yet: a settings window (custom shortcut, launch at login, limits), file and color clips, rich-text paste,
-paste queue, snippets, OCR, sync. See the [roadmap](#roadmap).
+## Install
 
-## Privacy and threat model
+**Homebrew** (one line):
 
-- Everything stays on your Mac, in `~/Library/Application Support/Pastu/history.sqlite`.
-  No network calls, no telemetry, no analytics.
-- Copies marked `org.nspasteboard.ConcealedType` or `TransientType` (what password managers set) are not stored,
-  and their content is never even read: Pastu looks at the pasteboard's type list first.
-- **History is stored in plaintext.** It is not encrypted yet. The folder is `0700` and the database files are `0600`
-  (owner only), and deleted or pruned clips are overwritten in the database file. But anything running as your
-  user, and anyone with access to your unlocked disk or a backup of it, can read the history.
-  Apps that do not mark their secrets as concealed (some do not) will have them recorded.
-  **Pictures such as screenshots are stored the same way** (unencrypted PNG in the same database) and can show
-  passwords or personal data; delete a clip with ⌘⌫, or ignore the app it came from with ⌘I.
-- Pastu records which app was frontmost when it noticed the copy. That is a best guess, not a guarantee.
-- Pastu needs the Accessibility permission only to send ⌘V for you. It never reads other apps' windows or keystrokes.
-- Found a security problem? See [SECURITY.md](SECURITY.md).
+```bash
+brew install --cask keremeersoy/pastu/pastu
+```
 
-## Installing a release
+**Or download** [Pastu-0.1.0.zip](https://github.com/keremeersoy/pastu/releases/download/v0.1.0/Pastu-0.1.0.zip),
+unzip it and move `Pastu.app` to Applications.
 
-Requires **macOS 15 (Sequoia) or later**. The prebuilt zip contains an **Apple Silicon (arm64)** build; on an
-Intel Mac, build from source.
+Requires macOS 15 or later on Apple Silicon.
 
-1. Download `Pastu-<version>.zip` from [Releases](https://github.com/keremeersoy/pastu/releases) and unzip it.
-   Each release lists the zip's SHA-256 checksum; you can check it with `shasum -a 256 Pastu-<version>.zip`.
-2. Move `Pastu.app` to `/Applications` and open it.
-3. macOS says it cannot verify the developer. **Why:** Pastu is signed ad hoc, not with an Apple Developer ID,
-   and is not notarized (the project has no paid Apple Developer account yet). To allow it **for this app only**:
-   open **System Settings → Privacy & Security**, scroll down to the message about Pastu and click
-   **Open Anyway**, then confirm. (On macOS 15 and later, Control-click → Open no longer skips this step.)
-   Do not turn off Gatekeeper for your whole Mac.
-4. Grant the **Accessibility** permission when asked (System Settings → Privacy & Security → Accessibility).
-   Pastu uses it only to press ⌘V for you. Without it, the chosen clip is still put on the clipboard and you
-   can press ⌘V yourself; the panel footer says when this is the case.
+**First launch:** macOS says it cannot verify the developer. Open **System Settings → Privacy & Security**, click
+**Open Anyway** next to Pastu, and confirm. You only do this once. (Pastu is not signed with a paid Apple Developer
+ID yet. Please don't turn off Gatekeeper for your whole Mac.)
 
-Because the signature is ad hoc, macOS may ask for the Accessibility permission again after you update Pastu.
-If macOS 15.4+ is set to deny Pastu clipboard access, the menu bar menu shows a warning.
+**Allow Accessibility** when asked, so Pastu can paste for you. Without it, Pastu copies the clip and you press ⌘V
+yourself.
+
+## Use it
+
+| Key | What it does |
+|-----|--------------|
+| ⌘⇧V | Open Pastu |
+| Type | Search everything you copied |
+| ↑ ↓ / Return | Pick a clip and paste it |
+| ⌘1 – ⌘9 | Paste one of the first nine clips |
+| ⌘P | Pin a clip (stays on top, never deleted) |
+| ⌘⌫ | Delete a clip |
+| ⌘I | Never record copies from this clip's app |
+| Tab | Show all, text, links or images |
+| Esc | Close |
+
+The menu bar icon lets you pause recording, clear the history and manage ignored apps.
+
+<p align="center">
+  <img src="docs/images/panel-pictures.png" width="640" alt="Pastu showing copied pictures with a large preview">
+</p>
+
+## Privacy
+
+- **Nothing leaves your Mac.** No network access, no accounts, no analytics.
+- **Passwords are skipped.** Copies that password managers mark as secret are never read or saved.
+- **You decide what is recorded.** Ignore any app with ⌘I, or pause recording from the menu bar.
+- **Old clips go away.** Pastu keeps up to 5,000 clips for 90 days (pinned clips stay).
+- **Good to know:** the history is saved on your disk without encryption. Only your user account can open the file,
+  but apps running under your account could read it. Copied screenshots are saved too. Delete anything sensitive
+  with ⌘⌫.
+
+## Good to know
+
+- The shortcut is fixed to ⌘⇧V for now. A settings window is planned.
+- Text and pictures are supported. Files, colors and rich text are not yet.
+- The screenshots above show the panel's layout with sample data. On macOS 26 the real panel has a
+  Liquid Glass background.
+- Some things have not been tested by hand yet, such as multiple displays and full-screen apps.
+  [Tell us](https://github.com/keremeersoy/pastu/issues/new/choose) if something looks off.
 
 ## Build from source
 
-Requires macOS 15+ to run, and **Xcode 26+** (Swift 6, macOS 26 SDK) to build: the panel uses Liquid Glass on
-macOS 26 and a material on macOS 15. Some tests open real windows, so run them in a logged-in GUI session.
+You need Xcode 26 or later.
 
 ```bash
-swift test                # run the tests
-./scripts/build-app.sh    # builds build/Pastu.app (see signing below)
-open build/Pastu.app
+git clone https://github.com/keremeersoy/pastu.git && cd pastu
+swift test
+./scripts/build-app.sh && open build/Pastu.app
 ```
-
-`VERSION=0.1.0 ./scripts/build-app.sh` sets the version in the built app only (the release workflow uses this).
-
-### Keeping the permission across rebuilds
-
-An ad-hoc signature changes with every build, so macOS forgets the Accessibility permission each time.
-Run this once to create a local, self-signed signing identity (in its own keychain; no Apple Developer
-account needed). `build-app.sh` then signs with it and the permission survives rebuilds:
-
-```bash
-./scripts/setup-dev-signing.sh
-```
-
-If it is not set up, `build-app.sh` falls back to an ad-hoc signature.
-
-What the script does: it creates a self-signed certificate "Pastu Local Dev" in a separate keychain,
-`~/Library/Keychains/pastu-dev.keychain-db`, protected by the throwaway password `pastu-dev`. That password is
-not a secret: the keychain holds only a local certificate that is valid for signing on your Mac alone, and it
-exists so the scripts can unlock it without a prompt. Do not distribute builds signed with it; other Macs
-will show the Gatekeeper warning for them. To undo it: `security delete-keychain ~/Library/Keychains/pastu-dev.keychain-db`.
-
-## Known limitations and unverified areas
-
-Being honest about what has and has not been checked:
-
-- **Not signed or notarized**: Gatekeeper warning on first launch; Accessibility may need re-granting after updates.
-- **History is unencrypted**, including pictures and screenshots (see the threat model above).
-- **Looks**: the Liquid Glass panel (macOS 26) and Dark mode have not been visually verified, and there is no real
-  screenshot yet.
-- **Not tested by hand yet**: pasting a picture into another app with ⌘V, clicking the menu bar items (Pause, the
-  Clear history alert, the Ignored apps submenu), ⌘⌫ and ⌘I on a real keyboard, multiple displays, full-screen
-  apps and Spaces.
-- **macOS 15.4+ clipboard privacy prompt**: how macOS asks about Pastu's clipboard access has not been observed.
-- **Build**: CI builds and runs all tests (including the ones that open real windows) on GitHub's macOS 26 runner
-  with Xcode 26.6 / macOS 26.5 SDK. Other Xcode versions have not been tried.
-- **Performance**: panel-open latency has not been measured.
-- The source app of a clip is a best guess (the frontmost app when the copy was noticed).
-- Search terms shorter than 3 characters are case-insensitive for ASCII letters only.
-- The app icon is a temporary one drawn in code (`scripts/make-icon.swift`); a designed icon is welcome.
-
-## Project layout
-
-```
-Sources/PastuCore/   UI-independent logic: clipboard monitor, privacy filter, SQLite store, list model, clip kinds
-Sources/Pastu/       Menu bar app shell: app delegate, status menu, paste coordinator, NSPanel, global hotkey
-Sources/Pastu/Panel/ SwiftUI views of the panel (list rows, preview, filter bar, footer)
-Tests/               Swift Testing tests (PastuCoreTests: logic; PastuTests: panel/key handling with real windows)
-Resources/           Info.plist and the app icon
-scripts/             build-app.sh, setup-dev-signing.sh, make-icon.swift
-docs/                Market research, product roadmap, naming (Turkish; see docs/README.md)
-```
-
-## Roadmap
-
-See [docs/02-urun-ve-yol-haritasi.md](docs/02-urun-ve-yol-haritasi.md) (in Turkish). Next up: a settings window
-(custom shortcut, ignored apps, launch at login), file and color clips, then paste queue, snippets and OCR.
-Issues labelled [`good first issue`](https://github.com/keremeersoy/pastu/labels/good%20first%20issue) are a good
-place to start.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+Bug reports, ideas and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ## License
 
-[MIT](LICENSE), copyright Pastu contributors.
+[MIT](LICENSE)

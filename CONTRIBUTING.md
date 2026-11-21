@@ -27,8 +27,16 @@ swift test
 ./scripts/build-app.sh && open build/Pastu.app
 ```
 
-Run `./scripts/setup-dev-signing.sh` once if you rebuild often: it keeps the Accessibility permission across
-rebuilds (see the README).
+### Keeping the Accessibility permission across rebuilds
+
+An ad-hoc signature changes with every build, so macOS forgets the Accessibility permission each time.
+Run `./scripts/setup-dev-signing.sh` once: it creates a self-signed certificate "Pastu Local Dev" in its own keychain
+(`~/Library/Keychains/pastu-dev.keychain-db`), and `build-app.sh` then signs with it. No Apple Developer account
+is needed. The keychain password `pastu-dev` is deliberately not a secret: the certificate only works on your Mac
+and the scripts must unlock it without a prompt. Never distribute builds signed with it. To undo it:
+`security delete-keychain ~/Library/Keychains/pastu-dev.keychain-db`.
+
+`VERSION=0.1.0 ./scripts/build-app.sh` sets the version of the built app only (the release workflow uses it).
 
 ## Tests
 

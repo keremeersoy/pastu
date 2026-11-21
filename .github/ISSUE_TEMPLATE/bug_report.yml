@@ -34,7 +34,7 @@ body:
       description: Tick what applies
       options:
         - label: Pastu is enabled in System Settings > Privacy & Security > Accessibility
-        - label: I rebuilt the app from source since I granted Accessibility (an ad-hoc signature resets it; see the README)
+        - label: I rebuilt the app from source since I granted Accessibility (an ad-hoc signature resets it; see CONTRIBUTING.md)
         - label: macOS asked about clipboard access (15.4+) and I allowed it
         - label: The panel footer says "Copies only"
   - type: textarea

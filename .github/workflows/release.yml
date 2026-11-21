@@ -71,7 +71,14 @@ jobs:
             ' CHANGELOG.md
             echo ""
             echo "### Known limitations and unverified areas"
-            echo "See the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/README.md#known-limitations-and-unverified-areas)."
+            echo "- Not signed with a Developer ID and not notarized; Accessibility may need to be granted again after an update."
+            echo "- The history (including copied pictures and screenshots) is stored unencrypted, protected by file permissions only."
+            echo "- Not yet checked by hand: the Liquid Glass look and Dark mode, pasting a picture into another app,"
+            echo "  ⌘⌫/⌘I on a real keyboard, the menu bar items, multiple displays, full-screen apps and Spaces."
+            echo "- How the macOS 15.4+ clipboard-privacy prompt treats Pastu has not been observed."
+            echo "- Panel-open latency has not been measured. The source app of a clip is a best guess."
+            echo "- Search terms shorter than 3 characters are case-insensitive for ASCII letters only."
+            echo "- Apple Silicon only; the app icon is temporary."
           } > notes.md
           cat notes.md
       - name: Publish prerelease

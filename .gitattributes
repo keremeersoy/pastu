@@ -6,3 +6,4 @@
 *.plist text eol=lf
 *.icns binary
 docs/** linguist-documentation
+*.png binary
