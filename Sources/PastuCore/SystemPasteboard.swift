@@ -3,9 +3,12 @@ import AppKit
 /// `ClipboardSource` backed by the real `NSPasteboard.general`.
 @MainActor
 public final class SystemPasteboard: ClipboardSource {
-    private let pasteboard = NSPasteboard.general
+    private let pasteboard: NSPasteboard
 
-    public init() {}
+    /// - Parameter pasteboard: the real clipboard by default; tests pass a private one.
+    public init(pasteboard: NSPasteboard = .general) {
+        self.pasteboard = pasteboard
+    }
 
     public var changeCount: Int { pasteboard.changeCount }
 
@@ -21,14 +24,33 @@ public final class SystemPasteboard: ClipboardSource {
         pasteboard.setString(text, forType: .string)
     }
 
-    /// STUB: pictures are written in the next sub-step.
-    public func write(imagePNG: Data) {}
+    /// Writes the picture as PNG. Older apps that ask for TIFF still get one: the system converts on demand.
+    public func write(imagePNG: Data) {
+        pasteboard.clearContents()
+        pasteboard.setData(imagePNG, forType: .png)
+    }
 
+    /// The picture is only read when the content is requested and there is no text (text wins), so a copy
+    /// with text never pays for decoding an image it will not use.
     public func snapshot(includingContent: Bool) -> PasteboardSnapshot {
-        PasteboardSnapshot(
+        var text: String?
+        var imagePNG: Data?
+        if includingContent {
+            text = pasteboard.string(forType: .string)
+            if text?.isEmpty ?? true { imagePNG = readPicture() }
+        }
+        return PasteboardSnapshot(
             types: (pasteboard.types ?? []).map(\.rawValue),
-            text: includingContent ? pasteboard.string(forType: .string) : nil,
-            sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            text: text,
+            sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+            imagePNG: imagePNG
         )
+    }
+
+    private func readPicture() -> Data? {
+        for type in [NSPasteboard.PasteboardType.png, .tiff] {
+            if let data = pasteboard.data(forType: type), let png = PNGConverter.png(from: data) { return png }
+        }
+        return nil
     }
 }
