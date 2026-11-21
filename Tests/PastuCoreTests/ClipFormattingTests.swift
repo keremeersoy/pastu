@@ -131,4 +131,70 @@ import Testing
         let preview = ClipFormatting.previewText(text, around: "zzz", limit: 100)
         #expect(preview.hiddenBefore == 0 && preview.text.count == 100 && preview.hiddenAfter == 4_900)
     }
+
+    // MARK: looksLikeCode
+
+    @Test func looksLikeCodeForCodeEditorSources() {
+        for id in ["com.apple.Terminal", "com.googlecode.iterm2", "com.mitchellh.ghostty",
+                   "dev.warp.Warp-Stable", "com.apple.dt.Xcode", "com.microsoft.VSCode", "dev.zed.Zed"] {
+            #expect(ClipFormatting.looksLikeCode("anything", sourceBundleIdentifier: id))
+        }
+        #expect(!ClipFormatting.looksLikeCode("anything", sourceBundleIdentifier: "com.apple.Safari"))
+    }
+
+    @Test func looksLikeCodeIsFalseForProse() {
+        #expect(!ClipFormatting.looksLikeCode("Hi; see you at 5.\nThanks", sourceBundleIdentifier: nil))
+    }
+
+    @Test func looksLikeCodeForShellSnippet() {
+        #expect(ClipFormatting.looksLikeCode("$ swift test\n$ git push", sourceBundleIdentifier: nil))
+    }
+
+    @Test func looksLikeCodeForBracesAndSemicolons() {
+        let code = "func f() {\n    return 1;\n}"
+        #expect(ClipFormatting.looksLikeCode(code, sourceBundleIdentifier: nil))
+    }
+
+    @Test func looksLikeCodeNeedsTwoLines() {
+        #expect(!ClipFormatting.looksLikeCode("$ swift test", sourceBundleIdentifier: nil))
+    }
+
+    // MARK: linkParts
+
+    @Test func linkPartsForUrlAndMailto() {
+        let url = ClipFormatting.linkParts("https://example.com/a/b?q=1")
+        #expect(url?.host == "example.com")
+        #expect(url?.full == "https://example.com/a/b?q=1")
+        let mail = ClipFormatting.linkParts("mailto:me@example.com")
+        #expect(mail?.host == "me@example.com")
+        #expect(mail?.full == "mailto:me@example.com")
+    }
+
+    @Test func linkPartsNilForPlainText() {
+        #expect(ClipFormatting.linkParts("just some text") == nil)
+    }
+
+    // MARK: accessibilityLabel
+
+    private func label(_ kind: ClipKind, _ app: String?, size: (width: Int, height: Int)? = nil,
+                       ago: Double, pinned: Bool = false) -> String {
+        let now = Date(timeIntervalSince1970: 10_000_000)
+        return ClipFormatting.accessibilityLabel(kind: kind, appName: app, pixelSize: size,
+                                                 copiedAt: now.addingTimeInterval(-ago), now: now, isPinned: pinned)
+    }
+
+    @Test func accessibilityLabelForms() {
+        #expect(label(.text, "Terminal", ago: 5, pinned: true) == "Text from Terminal, just now, pinned")
+        #expect(label(.link, "Safari", ago: 300) == "Link from Safari, 5 minutes ago")
+        #expect(label(.image, "Preview", size: (1440, 900), ago: 7_200) == "Image from Preview, 1440 by 900, 2 hours ago")
+        #expect(label(.text, nil, ago: 3 * 86_400) == "Text, 3 days ago")
+    }
+
+    @Test func accessibilityLabelSpokenTimeBuckets() {
+        #expect(label(.text, nil, ago: 60) == "Text, 1 minute ago")
+        #expect(label(.text, nil, ago: 3_600) == "Text, 1 hour ago")
+        #expect(label(.text, nil, ago: 86_400) == "Text, 1 day ago")
+        #expect(label(.text, nil, ago: 30 * 86_400) == "Text, 1 month ago")
+        #expect(label(.text, nil, ago: 90 * 86_400) == "Text, 3 months ago")
+    }
 }

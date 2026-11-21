@@ -78,4 +78,80 @@ public enum ClipFormatting {
         let value = size / megabyte
         return String(format: value < 10 ? "%.1f MB" : "%.0f MB", value)
     }
+
+    // MARK: Code detection
+
+    private static let codeSourceBundleIdentifiers: Set<String> = [
+        "com.apple.Terminal", "com.googlecode.iterm2", "com.mitchellh.ghostty", "dev.warp.Warp-Stable",
+        "com.apple.dt.Xcode", "com.microsoft.VSCode", "dev.zed.Zed",
+    ]
+
+    /// Whether the preview should use a monospaced font. Conservative: a terminal or editor as the source
+    /// is enough; otherwise the text needs at least two lines and two independent code signals, so prose
+    /// with a stray semicolon stays prose. Only the first 2,000 characters are inspected.
+    public static func looksLikeCode(_ text: String, sourceBundleIdentifier: String?) -> Bool {
+        if let sourceBundleIdentifier, codeSourceBundleIdentifiers.contains(sourceBundleIdentifier) { return true }
+
+        let lines = text.prefix(2_000).split(separator: "\n", omittingEmptySubsequences: false)
+        guard lines.count >= 2 else { return false }
+
+        // Two prompt lines in a row are a transcript, which is strong enough on its own; a single one is just a hint.
+        let shellLines = lines.filter { $0.hasPrefix("$ ") || $0.hasPrefix("#!") }.count
+        let openBraceLine = lines.firstIndex { $0.contains("{") }
+        let closeBraceLine = lines.lastIndex { $0.contains("}") }
+        let hasBracesOnDifferentLines = openBraceLine != nil && closeBraceLine != nil && openBraceLine != closeBraceLine
+        let hasSemicolonEnding = lines.contains { $0.last == ";" }
+        let hasIndentedLine = lines.contains { $0.hasPrefix("\t") || $0.hasPrefix("    ") }
+
+        let signals = (shellLines >= 2 ? 2 : shellLines)
+            + [hasBracesOnDifferentLines, hasSemicolonEnding, hasIndentedLine].filter { $0 }.count
+        return signals >= 2
+    }
+
+    // MARK: Links
+
+    /// The host (or mail address) and the full text of a link clip; `nil` when the text is not a link.
+    public static func linkParts(_ text: String) -> (host: String, full: String)? {
+        guard ClipKind.detect(text) == .link else { return nil }
+        let full = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if full.lowercased().hasPrefix("mailto:") {
+            let address = full.dropFirst("mailto:".count).prefix { $0 != "?" }
+            return (String(address), full)
+        }
+        guard let host = URLComponents(string: full)?.host else { return nil }
+        return (host, full)
+    }
+
+    // MARK: VoiceOver
+
+    /// One spoken sentence for a row, e.g. "Image from Preview, 1440 by 900, 2 hours ago, pinned".
+    public static func accessibilityLabel(
+        kind: ClipKind, appName: String?, pixelSize: (width: Int, height: Int)?,
+        copiedAt: Date, now: Date, isPinned: Bool
+    ) -> String {
+        var parts: [String] = []
+        let noun = switch kind {
+        case .text: "Text"
+        case .link: "Link"
+        case .image: "Image"
+        }
+        parts.append(appName.map { "\(noun) from \($0)" } ?? noun)
+        if kind == .image, let pixelSize { parts.append("\(pixelSize.width) by \(pixelSize.height)") }
+        parts.append(spokenTime(from: copiedAt, to: now))
+        if isPinned { parts.append("pinned") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Same buckets as `relativeTime`, spelled out so VoiceOver does not read "5m" as a letter.
+    private static func spokenTime(from date: Date, to now: Date) -> String {
+        let seconds = Int(now.timeIntervalSince(date))
+        func ago(_ count: Int, _ unit: String) -> String { "\(count) \(unit)\(count == 1 ? "" : "s") ago" }
+        switch seconds {
+        case ..<60: return "just now"
+        case ..<3_600: return ago(seconds / 60, "minute")
+        case ..<86_400: return ago(seconds / 3_600, "hour")
+        case ..<(30 * 86_400): return ago(seconds / 86_400, "day")
+        default: return ago(seconds / (30 * 86_400), "month")
+        }
+    }
 }
