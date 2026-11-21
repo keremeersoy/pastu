@@ -632,14 +632,14 @@ import Testing
         try store.insert(clip("plain note about swift", at: 1))
         try store.insert(clip("https://swift.org/blog", at: 2))
         try store.insert(clip("another note", at: 3))
-        try store.insert(clip("mailto:kerem@example.com", at: 4))
+        try store.insert(clip("mailto:user@example.com", at: 4))
         try store.insert(clip("visit https://swift.org today", at: 5)) // text: not a bare link
         return store
     }
 
     @Test func recentCanBeFilteredToLinks() throws {
         let store = try storeWithMixedKinds()
-        #expect(try store.recent(kind: .link).map(\.text) == ["mailto:kerem@example.com", "https://swift.org/blog"])
+        #expect(try store.recent(kind: .link).map(\.text) == ["mailto:user@example.com", "https://swift.org/blog"])
     }
 
     @Test func recentCanBeFilteredToText() throws {

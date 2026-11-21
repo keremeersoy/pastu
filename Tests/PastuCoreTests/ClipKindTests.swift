@@ -11,9 +11,9 @@ import Testing
         "HTTPS://EXAMPLE.COM/Path",
         "http://localhost:3000",
         "http://192.168.1.1:8080/admin",
-        "mailto:kerem@example.com",
-        "mailto:kerem@example.com?subject=Hi",
-        "mailto:kerem@example.com?cc=other@example.com", // the query may contain @
+        "mailto:user@example.com",
+        "mailto:user@example.com?subject=Hi",
+        "mailto:user@example.com?cc=other@example.com", // the query may contain @
     ])
     func detectsLinks(_ text: String) {
         #expect(ClipKind.detect(text) == .link)
@@ -38,7 +38,7 @@ import Testing
         "mailto:not-an-address",
         "mailto:@example.com",
         "mailto:?subject=a@b",                // nothing before the query
-        "mailto:kerem @example.com",          // whitespace inside
+        "mailto:user @example.com",          // whitespace inside
         "foo@example.com",                    // bare address, no mailto:
         "func f() { let u = \"https://x.com\" }",
         "https:/example.com",

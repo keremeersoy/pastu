@@ -9,11 +9,9 @@ or a way for another process to read or change the history).
 
 Please do **not** open a public issue for a security problem.
 
-Report it privately:
-
-- Use GitHub's "Report a vulnerability" button on the repository's Security tab (private vulnerability
-  reporting), once the maintainer has enabled it; or
-- email: **<!-- TODO(owner): add a security contact address before publishing -->**
+Report it privately with GitHub's **"Report a vulnerability"** button on the repository's Security tab
+(private vulnerability reporting). If that button is not available, contact the maintainer through the contact
+details on their GitHub profile and do not post the details publicly.
 
 Please include the macOS version, the Pastu version or commit, and steps to reproduce.
 You can expect an answer within about a week. This is a hobby-scale open source project, so there is no
