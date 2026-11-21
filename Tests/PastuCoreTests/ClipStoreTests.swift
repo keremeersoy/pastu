@@ -134,4 +134,100 @@ import Testing
         let second = try ClipStore(path: path)
         #expect(try second.recent().map(\.text) == ["kept"])
     }
+
+    // MARK: Retention
+
+    private let day: TimeInterval = 24 * 3600
+
+    @Test func pruneRemovesClipsOlderThanMaxAge() throws {
+        let store = try ClipStore()
+        let now = Date(timeIntervalSince1970: 100 * day)
+        try store.insert(clip("ancient", at: 100 * day - 40 * day))
+        try store.insert(clip("recent", at: 100 * day - 10 * day))
+
+        let removed = try store.prune(RetentionPolicy(maxCount: nil, maxAge: 30 * day), now: now)
+        #expect(removed == 1)
+        #expect(try store.recent().map(\.text) == ["recent"])
+    }
+
+    @Test func pruneKeepsOnlyTheNewestWhenOverMaxCount() throws {
+        let store = try ClipStore()
+        for i in 1...5 { try store.insert(clip("clip \(i)", at: Double(i))) }
+
+        let removed = try store.prune(RetentionPolicy(maxCount: 3, maxAge: nil))
+        #expect(removed == 2)
+        #expect(try store.recent().map(\.text) == ["clip 5", "clip 4", "clip 3"])
+    }
+
+    @Test func pruneAppliesBothLimits() throws {
+        let store = try ClipStore()
+        let now = Date(timeIntervalSince1970: 100 * day)
+        try store.insert(clip("ancient", at: 100 * day - 90 * day))
+        try store.insert(clip("a", at: 100 * day - 3 * day))
+        try store.insert(clip("b", at: 100 * day - 2 * day))
+        try store.insert(clip("c", at: 100 * day - 1 * day))
+
+        let removed = try store.prune(RetentionPolicy(maxCount: 2, maxAge: 30 * day), now: now)
+        #expect(removed == 2)
+        #expect(try store.recent().map(\.text) == ["c", "b"])
+    }
+
+    @Test func pruneWithoutLimitsRemovesNothing() throws {
+        let store = try ClipStore()
+        try store.insert(clip("old", at: 1))
+        #expect(try store.prune(RetentionPolicy(maxCount: nil, maxAge: nil)) == 0)
+        #expect(try store.recent().count == 1)
+    }
+
+    @Test func pruneWithNothingToRemoveReturnsZero() throws {
+        let store = try ClipStore()
+        try store.insert(clip("fresh", at: Date().timeIntervalSince1970))
+        #expect(try store.prune(RetentionPolicy()) == 0)
+    }
+
+    @Test func prunedClipsAreGoneFromSearchAndIndexStaysConsistent() throws {
+        let store = try ClipStore()
+        try store.insert(clip("remove me", at: 1))
+        try store.insert(clip("keep me", at: 2))
+        try store.prune(RetentionPolicy(maxCount: 1, maxAge: nil))
+        try store.verifyIntegrity()
+        #expect(try store.search("remove").isEmpty)
+        #expect(try store.search("keep").count == 1)
+    }
+
+    // MARK: File permissions
+
+    private func permissions(of path: String) throws -> Int {
+        let value = try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? NSNumber
+        return try #require(value).intValue
+    }
+
+    @Test func newDatabaseFileIsOwnerOnly() throws {
+        let path = NSTemporaryDirectory() + "pastu-perm-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+
+        _ = try ClipStore(path: path)
+        #expect(try permissions(of: path) == 0o600)
+    }
+
+    @Test func existingLooseDatabaseFileIsTightenedOnOpen() throws {
+        let path = NSTemporaryDirectory() + "pastu-perm-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+        FileManager.default.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o644])
+
+        _ = try ClipStore(path: path)
+        #expect(try permissions(of: path) == 0o600)
+    }
+
+    @Test func walSidecarFilesAreOwnerOnlyToo() throws {
+        let path = NSTemporaryDirectory() + "pastu-perm-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+
+        let store = try ClipStore(path: path)
+        try store.insert(clip("secret-ish", at: 1))
+        for suffix in ["-wal", "-shm"] where FileManager.default.fileExists(atPath: path + suffix) {
+            #expect(try permissions(of: path + suffix) == 0o600)
+        }
+        _ = store
+    }
 }

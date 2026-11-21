@@ -55,4 +55,29 @@ import Testing
         #expect(filter.shouldReadContent(of: vault) == false)
         #expect(filter.shouldReadContent(of: ordinary) == true)
     }
+
+    @Test func skipsTextLargerThanLimit() {
+        let filter = PrivacyFilter(maxTextBytes: 10)
+        let exact = PasteboardSnapshot(types: ["public.utf8-plain-text"], text: String(repeating: "a", count: 10))
+        let over = PasteboardSnapshot(types: ["public.utf8-plain-text"], text: String(repeating: "a", count: 11))
+        #expect(filter.decision(for: exact) == .record)
+        #expect(filter.decision(for: over) == .skip(.tooLarge))
+    }
+
+    @Test func limitCountsBytesNotCharacters() {
+        // "ç" is 2 bytes in UTF-8: 5 of them fit in 10 bytes, 6 do not.
+        let filter = PrivacyFilter(maxTextBytes: 10)
+        let fits = PasteboardSnapshot(types: ["public.utf8-plain-text"], text: String(repeating: "ç", count: 5))
+        let over = PasteboardSnapshot(types: ["public.utf8-plain-text"], text: String(repeating: "ç", count: 6))
+        #expect(filter.decision(for: fits) == .record)
+        #expect(filter.decision(for: over) == .skip(.tooLarge))
+    }
+
+    @Test func defaultFilterHasASizeLimit() {
+        let huge = PasteboardSnapshot(
+            types: ["public.utf8-plain-text"],
+            text: String(repeating: "a", count: PrivacyFilter.defaultMaxTextBytes + 1)
+        )
+        #expect(PrivacyFilter().decision(for: huge) == .skip(.tooLarge))
+    }
 }

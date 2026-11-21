@@ -8,6 +8,7 @@ public struct PrivacyFilter: Sendable {
         case transient
         case ignoredApp
         case empty
+        case tooLarge
     }
 
     public enum Decision: Equatable, Sendable {
@@ -18,10 +19,18 @@ public struct PrivacyFilter: Sendable {
     public static let concealedType = "org.nspasteboard.ConcealedType"
     public static let transientType = "org.nspasteboard.TransientType"
 
-    public var ignoredBundleIdentifiers: Set<String>
+    /// Copies larger than this (UTF-8 bytes) are not recorded: one huge copy must not bloat the database and search index.
+    public static let defaultMaxTextBytes = 1_000_000
 
-    public init(ignoredBundleIdentifiers: Set<String> = []) {
+    public var ignoredBundleIdentifiers: Set<String>
+    public var maxTextBytes: Int
+
+    public init(
+        ignoredBundleIdentifiers: Set<String> = [],
+        maxTextBytes: Int = PrivacyFilter.defaultMaxTextBytes
+    ) {
         self.ignoredBundleIdentifiers = ignoredBundleIdentifiers
+        self.maxTextBytes = maxTextBytes
     }
 
     /// Whether the content of this item may be read at all. Decided from metadata only,
@@ -36,6 +45,7 @@ public struct PrivacyFilter: Sendable {
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .skip(.empty)
         }
+        if text.utf8.count > maxTextBytes { return .skip(.tooLarge) }
         return .record
     }
 

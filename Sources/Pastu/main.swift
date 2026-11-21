@@ -11,11 +11,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hotKey: GlobalHotKey?
     private let systemPasteboard = SystemPasteboard()
     private var accessWarningItem: NSMenuItem?
+    private var storageWarningItem: NSMenuItem?
+    /// Set when the history database could not be opened or written; shown in the menu.
+    private var storageError: String?
+    private let retention = RetentionPolicy()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             let store = try ClipStore(path: Self.databasePath())
             self.store = store
+            try store.prune(retention)
             let model = ClipListModel(store: store)
             let panelController = PanelController(model: model) { [weak self] clip in
                 self?.paste(clip)
@@ -23,13 +28,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.panelController = panelController
 
             let monitor = ClipboardMonitor(source: systemPasteboard, filter: PrivacyFilter()) { [weak self] clip in
-                _ = try? store.insert(clip)
-                if self?.panelController?.isVisible == true { model.refresh() }
+                guard let self else { return }
+                do {
+                    try store.insert(clip)
+                    try store.prune(self.retention)
+                    self.storageError = nil
+                } catch {
+                    NSLog("Pastu could not save a clip: \(error)")
+                    self.storageError = "could not save: \(error)"
+                }
+                if self.panelController?.isVisible == true { model.refresh() }
             }
             monitor.start()
             self.monitor = monitor
         } catch {
             NSLog("Pastu could not open its database: \(error)")
+            storageError = "could not open history: \(error)"
         }
 
         // ⌘⇧V
@@ -75,6 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         accessWarningItem?.isHidden = !systemPasteboard.isAccessDenied
+        if let storageError {
+            storageWarningItem?.title = "⚠︎ History problem: \(storageError)"
+            storageWarningItem?.isHidden = false
+        } else {
+            storageWarningItem?.isHidden = true
+        }
     }
 
     private func setUpStatusItem() {
@@ -95,6 +115,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         accessWarningItem = warning
         menu.delegate = self
 
+        let storageWarning = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        storageWarning.isHidden = true
+        menu.addItem(storageWarning)
+        storageWarningItem = storageWarning
+
         menu.addItem(withTitle: "Show \(PastuInfo.name)", action: #selector(togglePanel), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())
@@ -113,7 +138,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
         )
         let dir = base.appendingPathComponent(PastuInfo.name, isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        // createDirectory leaves an existing folder untouched, so tighten it explicitly.
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         return dir.appendingPathComponent("history.sqlite").path
     }
 }

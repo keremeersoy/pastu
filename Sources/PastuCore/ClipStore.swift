@@ -11,6 +11,17 @@ public struct StoredClip: Equatable, Sendable {
     public let copyCount: Int
 }
 
+/// How much history to keep. `nil` means "no limit" for that dimension.
+public struct RetentionPolicy: Equatable, Sendable {
+    public var maxCount: Int?
+    public var maxAge: TimeInterval?
+
+    public init(maxCount: Int? = 5_000, maxAge: TimeInterval? = 90 * 24 * 3600) {
+        self.maxCount = maxCount
+        self.maxAge = maxAge
+    }
+}
+
 public struct ClipStoreError: Error, CustomStringConvertible {
     public let code: Int32
     public let message: String
@@ -26,6 +37,7 @@ public final class ClipStore {
 
     /// - Parameter path: database file path, or `nil` for an in-memory database (tests).
     public init(path: String? = nil) throws {
+        if let path { try Self.secureFile(at: path) }
         let rc = sqlite3_open_v2(path ?? ":memory:", &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil)
         guard rc == SQLITE_OK else {
             let error = ClipStoreError(code: rc, message: db.map { String(cString: sqlite3_errmsg($0)) } ?? "open failed")
@@ -93,6 +105,39 @@ public final class ClipStore {
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
     }
 
+    /// Deletes clips outside the policy: first the ones older than `maxAge`, then everything beyond
+    /// the newest `maxCount`. Returns how many were deleted.
+    @discardableResult
+    public func prune(_ policy: RetentionPolicy, now: Date = Date()) throws -> Int {
+        try exec("BEGIN")
+        do {
+            var removed = 0
+            if let maxAge = policy.maxAge {
+                let stmt = try prepare("DELETE FROM clips WHERE last_copied_at < ?1")
+                defer { sqlite3_finalize(stmt) }
+                sqlite3_bind_double(stmt, 1, now.addingTimeInterval(-maxAge).timeIntervalSince1970)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
+                removed += Int(sqlite3_changes(db))
+            }
+            if let maxCount = policy.maxCount {
+                let stmt = try prepare("""
+                    DELETE FROM clips WHERE id IN (
+                        SELECT id FROM clips ORDER BY last_copied_at DESC, id DESC LIMIT -1 OFFSET ?1
+                    )
+                    """)
+                defer { sqlite3_finalize(stmt) }
+                sqlite3_bind_int64(stmt, 1, Int64(max(maxCount, 0)))
+                guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
+                removed += Int(sqlite3_changes(db))
+            }
+            try exec("COMMIT")
+            return removed
+        } catch {
+            try? exec("ROLLBACK")
+            throw error
+        }
+    }
+
     public func delete(id: Int64) throws {
         let stmt = try prepare("DELETE FROM clips WHERE id = ?1")
         defer { sqlite3_finalize(stmt) }
@@ -103,6 +148,23 @@ public final class ClipStore {
     /// Throws if the full-text index is out of sync with the `clips` table (rank = 1 also compares the content table).
     public func verifyIntegrity() throws {
         try exec("INSERT INTO clips_fts (clips_fts, rank) VALUES ('integrity-check', 1)")
+    }
+
+    /// The history may contain sensitive text, so the database file is readable by the owner only.
+    /// Created (or tightened) before SQLite opens it; SQLite gives its -wal/-shm files the same mode.
+    private static func secureFile(at path: String) throws {
+        let fm = FileManager.default
+        do {
+            if fm.fileExists(atPath: path) {
+                try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+            } else if !fm.createFile(atPath: path, contents: nil, attributes: [.posixPermissions: 0o600]) {
+                throw ClipStoreError(code: -1, message: "could not create \(path)")
+            }
+        } catch let error as ClipStoreError {
+            throw error
+        } catch {
+            throw ClipStoreError(code: -1, message: "could not restrict permissions of \(path): \(error.localizedDescription)")
+        }
     }
 
     // MARK: Search query building
