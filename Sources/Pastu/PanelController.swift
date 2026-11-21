@@ -51,8 +51,27 @@ final class PanelController: NSObject, NSWindowDelegate {
             onIgnoreApp: { [weak self] in self?.ignoreSelectedApp() },
             imageData: imageData
         ))
+        // The shadow of a borderless, transparent window is traced from its drawn pixels: draw the
+        // rounded shell first, then recompute the shadow so it follows the corners, not the square frame.
+        panel.displayIfNeeded()
+        panel.invalidateShadow()
         panel.setFrameOrigin(origin(on: screenUnderMouse()))
+        appear()
+    }
+
+    /// A short fade-in of the whole window (shadow included), skipped with Reduce Motion.
+    private func appear() {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            panel.alphaValue = 1
+            panel.makeKeyAndOrderFront(nil)
+            return
+        }
+        panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            panel.animator().alphaValue = 1
+        }
     }
 
     /// ⌘I: stop recording copies from the selected clip's source app, and say so in the footer.

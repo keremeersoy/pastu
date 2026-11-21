@@ -4,6 +4,12 @@ import SwiftUI
 enum PanelMetrics {
     static let size = CGSize(width: 780, height: 460)
     static let listWidth: CGFloat = 340
+    /// Close to Spotlight's panel on macOS 26.
+    static let cornerRadius: CGFloat = 22
+    /// Gap between the shell edge and inner surfaces (rows, preview).
+    static let contentInset: CGFloat = 8
+    /// Inner shapes are concentric with the shell.
+    static var innerRadius: CGFloat { cornerRadius - contentInset }
 }
 
 struct PanelView: View {
@@ -96,6 +102,7 @@ struct PanelView: View {
                 }
                 .padding(8)
             }
+            .panelScrollEdges()
             .onChange(of: model.selectedIndex) {
                 if let id = model.selectedClip?.id { proxy.scrollTo(id) }
             }
