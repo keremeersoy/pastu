@@ -464,4 +464,80 @@ import Testing
         try store.verifyIntegrity()
         #expect(try store.search("nother").isEmpty)
     }
+
+    // MARK: Total size cap
+
+    /// A clip whose text is exactly `bytes` bytes long (ASCII), unique per `tag`.
+    private func sized(_ tag: Int, bytes: Int = 100, at seconds: TimeInterval) -> CapturedClip {
+        let prefix = "\(tag)-"
+        return clip(prefix + String(repeating: "x", count: bytes - prefix.utf8.count), at: seconds)
+    }
+
+    @Test func estimatedSizeIsTextBytesTimesOverheadFactor() throws {
+        let store = try ClipStore()
+        try store.insert(sized(1, at: 1))
+        try store.insert(sized(2, at: 2))
+        #expect(try store.estimatedSizeInBytes() == Int(200 * ClipStore.indexOverheadFactor))
+    }
+
+    @Test func overheadFactorIsDocumentedValue() {
+        #expect(ClipStore.indexOverheadFactor == 4.5)
+    }
+
+    @Test func estimatedSizeCountsBytesNotCharacters() throws {
+        let store = try ClipStore()
+        try store.insert(clip("ççççç", at: 1)) // 5 characters, 10 bytes
+        #expect(try store.estimatedSizeInBytes() == Int(10 * ClipStore.indexOverheadFactor))
+    }
+
+    @Test func pruneDeletesOldestUntilUnderTheSizeCap() throws {
+        let store = try ClipStore()
+        for i in 1...5 { try store.insert(sized(i, at: Double(i))) } // 5 * 100 * 4.5 = 2250
+        let cap = Int(2.5 * 100 * ClipStore.indexOverheadFactor)      // room for exactly 2
+        let removed = try store.prune(RetentionPolicy(maxCount: nil, maxAge: nil, maxTotalBytes: cap))
+        #expect(removed == 3)
+        #expect(try store.recent().map(\.text.count) == [100, 100])
+        #expect(try store.recent().map { $0.text.prefix(2) } == ["5-", "4-"])
+        #expect(try store.estimatedSizeInBytes() <= cap)
+        try store.verifyIntegrity()
+    }
+
+    @Test func sizeCapKeepsEverythingWhenAlreadyUnderTheCap() throws {
+        let store = try ClipStore()
+        for i in 1...3 { try store.insert(sized(i, at: Double(i))) }
+        let exact = try store.estimatedSizeInBytes()
+        #expect(try store.prune(RetentionPolicy(maxCount: nil, maxAge: nil, maxTotalBytes: exact)) == 0)
+        #expect(try store.recent().count == 3)
+    }
+
+    @Test func sizeCapNeverDeletesPinnedClips() throws {
+        let store = try ClipStore()
+        let pinned = try store.insert(sized(1, at: 1)) // the oldest
+        try store.setPinned(id: pinned, true)
+        for i in 2...4 { try store.insert(sized(i, at: Double(i))) }
+        // The cap is smaller than the pinned clip alone: all unpinned go, the pinned one stays.
+        let removed = try store.prune(RetentionPolicy(maxCount: nil, maxAge: nil, maxTotalBytes: 10))
+        #expect(removed == 3)
+        #expect(try store.recent().map(\.id) == [pinned])
+    }
+
+    @Test func nilSizeCapMeansUnlimited() throws {
+        let store = try ClipStore()
+        for i in 1...3 { try store.insert(sized(i, at: Double(i))) }
+        #expect(try store.prune(RetentionPolicy(maxCount: nil, maxAge: nil, maxTotalBytes: nil)) == 0)
+    }
+
+    @Test func defaultSizeCapIs200MB() {
+        #expect(RetentionPolicy().maxTotalBytes == 200 * 1024 * 1024)
+    }
+
+    @Test func sizeCapRemovesOldestByLastCopiedNotByInsertOrder() throws {
+        let store = try ClipStore()
+        try store.insert(sized(1, at: 10))
+        try store.insert(sized(2, at: 20))
+        try store.insert(sized(1, at: 30)) // re-copy: clip 1 is now the newest
+        let cap = Int(1.5 * 100 * ClipStore.indexOverheadFactor)
+        try store.prune(RetentionPolicy(maxCount: nil, maxAge: nil, maxTotalBytes: cap))
+        #expect(try store.recent().map { $0.text.prefix(2) } == ["1-"])
+    }
 }
