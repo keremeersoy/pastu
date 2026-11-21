@@ -4,10 +4,6 @@ import Testing
 
 @MainActor
 @Suite struct IgnoredAppsTests {
-    private func freshDefaults() -> UserDefaults {
-        UserDefaults(suiteName: "pastu.test.\(UUID().uuidString)")!
-    }
-
     @Test func startsEmpty() {
         #expect(IgnoredApps().bundleIdentifiers.isEmpty)
     }
@@ -20,19 +16,19 @@ import Testing
     }
 
     @Test func listSurvivesARelaunch() {
-        let defaults = freshDefaults()
-        IgnoredApps(defaults: defaults).add("com.example.vault")
-        #expect(IgnoredApps(defaults: defaults).bundleIdentifiers == ["com.example.vault"])
+        let settings = InMemorySettings()   // sharing the store between two instances simulates a relaunch
+        IgnoredApps(store: settings).add("com.example.vault")
+        #expect(IgnoredApps(store: settings).bundleIdentifiers == ["com.example.vault"])
     }
 
     @Test func removeTakesAnAppOffAndPersists() {
-        let defaults = freshDefaults()
-        let apps = IgnoredApps(defaults: defaults)
+        let settings = InMemorySettings()
+        let apps = IgnoredApps(store: settings)
         apps.add("com.a")
         apps.add("com.b")
         apps.remove("com.a")
         #expect(apps.bundleIdentifiers == ["com.b"])
-        #expect(IgnoredApps(defaults: defaults).bundleIdentifiers == ["com.b"])
+        #expect(IgnoredApps(store: settings).bundleIdentifiers == ["com.b"])
     }
 
     @Test func removingAnUnknownAppIsHarmless() {

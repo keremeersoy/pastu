@@ -1,10 +1,10 @@
 import Foundation
 
 /// Apps whose copies Pastu must never record or even read (password managers, banking apps, …).
-/// Persisted in `UserDefaults`.
+/// Persisted in a `SettingsStore`.
 @MainActor
 public final class IgnoredApps {
-    private let defaults: UserDefaults?
+    private let store: SettingsStore?
     private static let key = "ignoredApps"
 
     /// Called with the new set after every real change (not for no-ops).
@@ -12,10 +12,10 @@ public final class IgnoredApps {
     public private(set) var bundleIdentifiers: Set<String>
     public var sortedIdentifiers: [String] { bundleIdentifiers.sorted() }
 
-    /// - Parameter defaults: where to persist the list, or `nil` to keep it in memory only (tests).
-    public init(defaults: UserDefaults? = nil) {
-        self.defaults = defaults
-        self.bundleIdentifiers = Set(defaults?.stringArray(forKey: Self.key) ?? [])
+    /// - Parameter store: where to persist the list, or `nil` to keep it only in this object.
+    public init(store: SettingsStore? = nil) {
+        self.store = store
+        self.bundleIdentifiers = Set(store?.stringArray(forKey: Self.key) ?? [])
     }
 
     /// Returns true when the app was newly added; blank identifiers are rejected.
@@ -33,7 +33,7 @@ public final class IgnoredApps {
     }
 
     private func changed() {
-        defaults?.set(sortedIdentifiers, forKey: Self.key)
+        store?.set(sortedIdentifiers, forKey: Self.key)
         onChange?(bundleIdentifiers)
     }
 }

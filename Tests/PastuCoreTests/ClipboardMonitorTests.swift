@@ -329,24 +329,17 @@ private final class FakeSource: ClipboardSource {
 
 @MainActor
 @Suite struct RecordingStateTests {
-    private func defaults() -> UserDefaults {
-        let name = "pastu.tests.\(UUID().uuidString)"
-        let d = UserDefaults(suiteName: name)!
-        d.removePersistentDomain(forName: name)
-        return d
-    }
-
     @Test func startsRecording() {
         #expect(RecordingState().isPaused == false)
-        #expect(RecordingState(defaults: defaults()).isPaused == false)
+        #expect(RecordingState(store: InMemorySettings()).isPaused == false)
     }
 
     @Test func pausedFlagSurvivesRelaunch() {
-        let d = defaults()
-        RecordingState(defaults: d).isPaused = true
-        #expect(RecordingState(defaults: d).isPaused == true)
-        RecordingState(defaults: d).isPaused = false
-        #expect(RecordingState(defaults: d).isPaused == false)
+        let settings = InMemorySettings()   // sharing the store between two instances simulates a relaunch
+        RecordingState(store: settings).isPaused = true
+        #expect(RecordingState(store: settings).isPaused == true)
+        RecordingState(store: settings).isPaused = false
+        #expect(RecordingState(store: settings).isPaused == false)
     }
 
     @Test func togglesBetweenStates() {

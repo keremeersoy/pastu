@@ -191,7 +191,7 @@ extension ShellTests {
         let store = try ClipStore()
         try store.insert(CapturedClip(text: "from a vault", sourceBundleIdentifier: app, date: Date(timeIntervalSince1970: 1)))
         let model = ClipListModel(store: store)
-        let ignored = IgnoredApps(defaults: UserDefaults(suiteName: "pastu.test.\(UUID().uuidString)"))
+        let ignored = IgnoredApps()   // in memory: nothing is written to ~/Library/Preferences
         let controller = PanelController(model: model, canAutoPaste: { true }, ignoredApps: ignored, onSelect: { _ in })
         return (controller, model, ignored)
     }

@@ -16,9 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Set when the history database could not be opened or written; shown in the menu.
     private var storageError: String?
     private let retention = RetentionPolicy()
-    private let recording = RecordingState(defaults: .standard)
+    private let recording = RecordingState(store: UserDefaults.standard)
     private var model: ClipListModel?
-    private let ignoredApps = IgnoredApps(defaults: .standard)
+    private let ignoredApps = IgnoredApps(store: UserDefaults.standard)
     private var ignoredMenuItem: NSMenuItem?
     private var pauseItem: NSMenuItem?
 
