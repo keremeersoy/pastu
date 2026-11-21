@@ -583,4 +583,58 @@ import Testing
         try store.insert(clip("after", at: 2))
         #expect(try store.search("after").count == 1)
     }
+
+    // MARK: Kind filter
+
+    private func storeWithMixedKinds() throws -> ClipStore {
+        let store = try ClipStore()
+        try store.insert(clip("plain note about swift", at: 1))
+        try store.insert(clip("https://swift.org/blog", at: 2))
+        try store.insert(clip("another note", at: 3))
+        try store.insert(clip("mailto:kerem@example.com", at: 4))
+        try store.insert(clip("visit https://swift.org today", at: 5)) // text: not a bare link
+        return store
+    }
+
+    @Test func recentCanBeFilteredToLinks() throws {
+        let store = try storeWithMixedKinds()
+        #expect(try store.recent(kind: .link).map(\.text) == ["mailto:kerem@example.com", "https://swift.org/blog"])
+    }
+
+    @Test func recentCanBeFilteredToText() throws {
+        let store = try storeWithMixedKinds()
+        #expect(try store.recent(kind: .text).map(\.text) == ["visit https://swift.org today", "another note", "plain note about swift"])
+    }
+
+    @Test func noKindMeansEverything() throws {
+        #expect(try storeWithMixedKinds().recent(kind: nil).count == 5)
+    }
+
+    @Test func searchCombinesQueryAndKind() throws {
+        let store = try storeWithMixedKinds()
+        #expect(try store.search("swift", kind: .link).map(\.text) == ["https://swift.org/blog"])
+        #expect(try store.search("swift", kind: .text).map(\.text) == ["visit https://swift.org today", "plain note about swift"])
+        #expect(try store.search("sw", kind: .link).map(\.text) == ["https://swift.org/blog"]) // short term path
+    }
+
+    @Test func kindFilterAppliesBeforeTheLimit() throws {
+        let store = try ClipStore()
+        try store.insert(clip("https://old.example.com", at: 1))
+        for i in 2...10 { try store.insert(clip("note \(i)", at: Double(i))) }
+        #expect(try store.recent(limit: 3, kind: .link).map(\.text) == ["https://old.example.com"])
+    }
+
+    @Test func kindFilterKeepsPinnedFirst() throws {
+        let store = try ClipStore()
+        try store.insert(clip("https://new.example.com", at: 2))
+        let old = try store.insert(clip("https://old.example.com", at: 1))
+        try store.setPinned(id: old, true)
+        #expect(try store.recent(kind: .link).first?.text == "https://old.example.com")
+    }
+
+    @Test func storedClipKnowsItsKind() throws {
+        let store = try storeWithMixedKinds()
+        let kinds = try store.recent().map(\.kind)
+        #expect(kinds == [.text, .link, .text, .link, .text])
+    }
 }

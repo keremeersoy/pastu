@@ -10,6 +10,8 @@ public struct StoredClip: Equatable, Sendable {
     public let lastCopiedAt: Date
     public let copyCount: Int
     public let isPinned: Bool
+
+    public var kind: ClipKind { ClipKind.detect(text) }
 }
 
 /// How much history to keep. `nil` means "no limit" for that dimension.
@@ -52,6 +54,7 @@ public final class ClipStore {
             sqlite3_close(db)
             throw error
         }
+        try registerFunctions()
         try migrate()
     }
 
@@ -82,11 +85,24 @@ public final class ClipStore {
         return id
     }
 
-    public func recent(limit: Int = 50) throws -> [StoredClip] {
+    /// Pinned first, then newest. `kind` restricts the result to text or links; it applies before `limit`.
+    public func recent(limit: Int = 50, kind: ClipKind? = nil) throws -> [StoredClip] {
         try query("""
-            SELECT id, text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned
-            FROM clips ORDER BY pinned DESC, last_copied_at DESC, id DESC LIMIT ?1
+            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned
+            FROM clips c
+            WHERE \(Self.kindCondition(kind))
+            ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
             """, limit: limit)
+    }
+
+    /// SQL for the kind filter. Uses `pastu_is_link`, which calls `ClipKind.detect`, so the filter
+    /// and the Swift-side `StoredClip.kind` can never disagree.
+    private static func kindCondition(_ kind: ClipKind?) -> String {
+        switch kind {
+        case nil: "1"
+        case .link?: "pastu_is_link(c.text) = 1"
+        case .text?: "pastu_is_link(c.text) = 0"
+        }
     }
 
     /// Substring search: every term must appear somewhere in the text (any position, any case,
@@ -94,14 +110,14 @@ public final class ClipStore {
     ///
     /// Terms of 3+ characters use the trigram index. Shorter terms cannot (a trigram needs 3 characters),
     /// so they are checked with `instr`, which is only case-insensitive for ASCII letters.
-    public func search(_ query: String, limit: Int = 50) throws -> [StoredClip] {
+    public func search(_ query: String, limit: Int = 50, kind: ClipKind? = nil) throws -> [StoredClip] {
         let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        if terms.isEmpty { return try recent(limit: limit) }
+        if terms.isEmpty { return try recent(limit: limit, kind: kind) }
 
         let indexed = terms.filter { $0.count >= 3 }
         let short = terms.filter { $0.count < 3 }
 
-        var conditions: [String] = []
+        var conditions: [String] = [Self.kindCondition(kind)]
         var binds: [String] = []
         let source: String
         if indexed.isEmpty {
@@ -264,6 +280,24 @@ public final class ClipStore {
     /// like `"`, `(` or `*` can never cause a syntax error. With the trigram index a phrase is a substring.
     static func ftsMatchExpression(for terms: [String]) -> String {
         terms.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: " ")
+    }
+
+    // MARK: SQL functions
+
+    /// `pastu_is_link(text)`: 1 when `ClipKind.detect(text)` is `.link`, else 0.
+    private func registerFunctions() throws {
+        let rc = sqlite3_create_function_v2(
+            db, "pastu_is_link", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, nil,
+            { context, argc, argv in
+                guard argc == 1, let argv, let raw = sqlite3_value_text(argv[0]) else {
+                    sqlite3_result_int(context, 0)
+                    return
+                }
+                sqlite3_result_int(context, ClipKind.detect(String(cString: raw)) == .link ? 1 : 0)
+            },
+            nil, nil, nil
+        )
+        guard rc == SQLITE_OK else { throw lastError() }
     }
 
     // MARK: Schema

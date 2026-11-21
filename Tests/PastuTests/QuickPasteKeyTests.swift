@@ -77,5 +77,33 @@ extension ShellTests {
         #expect(model.clips.first?.text == "oldest")
         #expect(model.clips.first?.isPinned == true)
     }
+
+    @Test func tabCyclesTheTypeFilter() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+
+        let store = try ClipStore()
+        for (i, text) in ["a note", "https://swift.org", "another note"].enumerated() {
+            try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        let model = ClipListModel(store: store)
+
+        let panel = ClipPanel(size: NSSize(width: 780, height: 460))
+        panel.contentView = NSHostingView(rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        panel.makeKeyAndOrderFront(nil)
+        await pump()
+        defer { panel.orderOut(nil) }
+
+        NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
+        await pump(0.2)
+        #expect(model.filter == .text)
+        NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
+        await pump(0.2)
+        #expect(model.filter == .links)
+        #expect(model.clips.map(\.text) == ["https://swift.org"])
+        NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
+        await pump(0.2)
+        #expect(model.filter == .all)
+    }
 }
 }
