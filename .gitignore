@@ -8,3 +8,6 @@ xcuserdata/
 
 # Local-only notes (never commit)
 notes/
+
+# Claude Code local project data (settings, agent worktrees): never commit
+.claude/

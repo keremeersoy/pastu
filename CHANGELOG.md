@@ -15,7 +15,9 @@ will follow [Semantic Versioning](https://semver.org/) once it has a first relea
 - Pinned clips: kept on top and never pruned.
 - Auto-paste via the Accessibility permission, with a clear warning when it is missing.
 - Privacy filter: concealed and transient pasteboard items are never read or stored; copies over 1 MB are skipped.
-- Retention policy: 5,000 unpinned clips / 90 days.
+- Retention policy: 5,000 unpinned clips, 90 days and about 200 MB in total (estimated); pinned clips are never pruned.
+- Pause/Resume recording and Clear history (keeps pinned) in the menu bar menu; the pause state survives a relaunch.
+- Link detection and a type filter (All / Text / Links) cycled with Tab.
 - Database folder `0700`, database files `0600`; old looser permissions are tightened on open.
 - Local self-signed signing script so the Accessibility permission survives rebuilds.
 - Database migrations (`PRAGMA user_version`) from older builds (pins, trigram index).

@@ -15,8 +15,13 @@ A fast, local-first, privacy-focused clipboard manager for macOS. Open source, f
 - ↑ ↓ to select, **Return** to paste, **⌘1–⌘9** to paste a row directly, **⌘P** to pin or unpin, **Esc** to close.
 - Pinned clips stay on top and are never deleted automatically.
 - Two-pane panel: list with source app and relative time, plus a preview of the selected clip.
+- **Tab** cycles the type filter above the list: All, Text, Links (a link is a clip that is only one http/https
+  URL or a mailto address).
 - Duplicate copies are merged and move to the top.
-- History limits: 5,000 unpinned clips and 90 days, whichever is hit first. Copies over 1 MB are skipped.
+- Menu bar menu: **Pause recording** / **Resume recording** (the choice survives a relaunch; while paused Pastu does not
+  even look at the pasteboard) and **Clear history…** (asks first; pinned clips are kept).
+- History limits, whichever is hit first: 5,000 unpinned clips, 90 days, or about 200 MB in total (an estimate: the text
+  size times 4.5 for the search index). Pinned clips are never deleted by these limits. Copies over 1 MB are skipped.
 
 ## Privacy and threat model
 
@@ -70,7 +75,7 @@ will show the Gatekeeper warning for them. To undo it: `security delete-keychain
 ## Project layout
 
 ```
-Sources/PastuCore/   UI-independent logic: clipboard monitor, privacy filter, SQLite store, list model
+Sources/PastuCore/   UI-independent logic: clipboard monitor, privacy filter, SQLite store, list model, clip kinds
 Sources/Pastu/       Menu bar app shell: NSPanel, SwiftUI view, global hotkey, paste sender
 Tests/               Swift Testing tests (PastuCoreTests: logic; PastuTests: panel/key handling with real windows)
 scripts/             build-app.sh, setup-dev-signing.sh
@@ -79,8 +84,8 @@ docs/                Market research, product roadmap, naming (Turkish)
 
 ## Roadmap
 
-See [docs/02-urun-ve-yol-haritasi.md](docs/02-urun-ve-yol-haritasi.md) (in Turkish). Next up: images, links and
-file types, pins, source-app info, privacy indicator.
+See [docs/02-urun-ve-yol-haritasi.md](docs/02-urun-ve-yol-haritasi.md) (in Turkish). Next up: images and file types,
+a settings window (custom shortcut, ignored apps, launch at login), then paste queue, snippets and OCR.
 
 ## Contributing
 
