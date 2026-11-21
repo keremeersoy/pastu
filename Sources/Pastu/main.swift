@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let retention = RetentionPolicy()
     private let recording = RecordingState(defaults: .standard)
     private var model: ClipListModel?
+    private let ignoredApps = IgnoredApps(defaults: .standard)
+    private var ignoredMenuItem: NSMenuItem?
     private var pauseItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -27,12 +29,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try store.prune(retention)
             let model = ClipListModel(store: store)
             self.model = model
-            let panelController = PanelController(model: model, canAutoPaste: { PasteSender.isTrusted }) { [weak self] clip in
+            let panelController = PanelController(model: model, canAutoPaste: { PasteSender.isTrusted }, ignoredApps: ignoredApps) { [weak self] clip in
                 self?.paste(clip)
             }
             self.panelController = panelController
 
-            let monitor = ClipboardMonitor(source: systemPasteboard, filter: PrivacyFilter(), recording: recording) { [weak self] clip in
+            let monitor = ClipboardMonitor(
+                source: systemPasteboard,
+                filter: PrivacyFilter(ignoredBundleIdentifiers: ignoredApps.bundleIdentifiers),
+                recording: recording
+            ) { [weak self] clip in
                 guard let self else { return }
                 do {
                     try store.insert(clip)
@@ -44,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 if self.panelController?.isVisible == true { model.refresh() }
             }
+            // Adding or removing an ignored app takes effect for the very next copy.
+            ignoredApps.onChange = { [weak monitor] ids in monitor?.filter.ignoredBundleIdentifiers = ids }
             monitor.start()
             self.monitor = monitor
         } catch {
@@ -136,7 +144,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panelController?.toggle()
     }
 
+    /// Rebuilt every time the menu opens: one "Stop ignoring …" entry per ignored app.
+    private func rebuildIgnoredAppsMenu() {
+        guard let submenu = ignoredMenuItem?.submenu else { return }
+        submenu.removeAllItems()
+        let ids = ignoredApps.sortedIdentifiers
+        if ids.isEmpty {
+            let none = NSMenuItem(title: "None (press ⌘I on a clip in the panel)", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            submenu.addItem(none)
+            return
+        }
+        for id in ids {
+            let name = AppLookup.name(for: id) ?? id
+            let item = NSMenuItem(title: "Stop ignoring \(name)", action: #selector(stopIgnoring(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = id
+            submenu.addItem(item)
+        }
+    }
+
+    @objc private func stopIgnoring(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { ignoredApps.remove(id) }
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
+        rebuildIgnoredAppsMenu()
         accessWarningItem?.isHidden = !systemPasteboard.isAccessDenied
         accessibilityWarningItem?.isHidden = PasteSender.isTrusted
         if let storageError {
@@ -186,6 +219,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pauseItem = pause
         menu.addItem(withTitle: "Clear history…", action: #selector(clearHistory), keyEquivalent: "")
             .target = self
+        let ignored = NSMenuItem(title: "Ignored apps", action: nil, keyEquivalent: "")
+        ignored.submenu = NSMenu()
+        menu.addItem(ignored)
+        ignoredMenuItem = ignored
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Quit \(PastuInfo.name)",

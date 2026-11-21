@@ -89,5 +89,11 @@ extension ShellTests {
         let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
         save(image, name: "panel-links-empty")
     }
+    @Test func panelRendersWithAFooterNotice() async throws {
+        let model = try sampleModel()
+        model.notice = "Ignoring Terminal: its future copies are not recorded or read"
+        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        save(image, name: "panel-notice")
+    }
 }
 }

@@ -13,12 +13,17 @@ A fast, local-first, privacy-focused clipboard manager for macOS. Open source, f
   Every word must match. Words shorter than 3 characters are matched without the index and are only
   case-insensitive for ASCII letters.
 - ↑ ↓ to select, **Return** to paste, **⌘1–⌘9** to paste a row directly, **⌘P** to pin or unpin,
-  **⌘⌫** to delete the selected clip from the history (pinned ones too), **Esc** to close.
+  **⌘⌫** to delete the selected clip from the history (pinned ones too), **⌘I** to ignore the selected clip's
+  source app, **Esc** to close.
 - Pinned clips stay on top and are never deleted automatically.
 - Two-pane panel: list with source app and relative time, plus a preview of the selected clip.
 - **Tab** cycles the type filter above the list: All, Text, Links (a link is a clip that is only one http/https
   URL or a mailto address).
 - Duplicate copies are merged and move to the top.
+- **Ignored apps**: press ⌘I on a clip and Pastu stops recording copies from its source app (and never reads
+  their content). The list is saved, and "Ignored apps" in the menu bar menu lets you stop ignoring one. This is best
+  effort: the source app is whichever app was frontmost when Pastu noticed the copy, so a very fast app switch
+  can be misattributed. Clips already recorded are kept; delete them with ⌘⌫.
 - Menu bar menu: **Pause recording** / **Resume recording** (the choice survives a relaunch; while paused Pastu does not
   even look at the pasteboard) and **Clear history…** (asks first; pinned clips are kept).
 - History limits, whichever is hit first: 5,000 unpinned clips, 90 days, or about 200 MB in total (an estimate: the text

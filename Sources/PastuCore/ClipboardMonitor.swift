@@ -22,7 +22,8 @@ public struct CapturedClip: Equatable, Sendable {
 @MainActor
 public final class ClipboardMonitor {
     private let source: ClipboardSource
-    private let filter: PrivacyFilter
+    /// Replaceable at runtime, e.g. when the user adds an app to the ignore list.
+    public var filter: PrivacyFilter
     private let recording: RecordingState
     private let onCapture: (CapturedClip) -> Void
     private var lastChangeCount: Int

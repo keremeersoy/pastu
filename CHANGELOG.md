@@ -18,6 +18,7 @@ will follow [Semantic Versioning](https://semver.org/) once it has a first relea
 - Retention policy: 5,000 unpinned clips, 90 days and about 200 MB in total (estimated); pinned clips are never pruned.
 - Pause/Resume recording and Clear history (keeps pinned) in the menu bar menu; the pause state survives a relaunch.
 - Link detection and a type filter (All / Text / Links) cycled with Tab.
+- Ignored apps: ⌘I in the panel ignores the selected clip's source app (saved; managed from the menu bar menu).
 - Delete the selected clip from the panel with ⌘⌫ (plain Backspace keeps editing the search text).
 - Database folder `0700`, database files `0600`; old looser permissions are tightened on open.
 - Local self-signed signing script so the Accessibility permission survives rebuilds.

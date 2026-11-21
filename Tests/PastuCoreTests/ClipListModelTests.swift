@@ -231,4 +231,38 @@ import Testing
         model.deleteSelected()
         #expect(model.clips.map(\.text) == ["a"])
     }
+
+    // MARK: Notice
+
+    @Test func noticeStartsEmpty() throws {
+        #expect(ClipListModel(store: try makeStore(["a"])).notice == nil)
+    }
+
+    @Test func noticeDisappearsWhenTheSelectionMoves() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b"]))
+        model.notice = "Ignoring Safari"
+        model.moveSelection(by: 1)
+        #expect(model.notice == nil)
+    }
+
+    @Test func noticeDisappearsWhenTheQueryChanges() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b"]))
+        model.notice = "Ignoring Safari"
+        model.query = "a"
+        #expect(model.notice == nil)
+    }
+
+    @Test func noticeDisappearsWhenTheFilterChanges() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b"]))
+        model.notice = "Ignoring Safari"
+        model.cycleFilter()
+        #expect(model.notice == nil)
+    }
+
+    @Test func aNewCopyDoesNotHideTheNotice() throws {
+        let model = ClipListModel(store: try makeStore(["a"]))
+        model.notice = "Ignoring Safari"
+        model.refresh()
+        #expect(model.notice == "Ignoring Safari")
+    }
 }

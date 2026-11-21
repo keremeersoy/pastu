@@ -10,6 +10,7 @@ struct PanelView: View {
     let model: ClipListModel
     let canAutoPaste: Bool
     let onSubmit: () -> Void
+    var onIgnoreApp: () -> Void = {}
 
     @FocusState private var searchFocused: Bool
 
@@ -30,6 +31,12 @@ struct PanelView: View {
                           let digit = Int(press.characters), (1...9).contains(digit),
                           model.select(row: digit - 1) else { return .ignored }
                     onSubmit()
+                    return .handled
+                }
+                .onKeyPress(characters: CharacterSet(charactersIn: "iI"), phases: .down) { press in
+                    // ⌘I stops recording copies from the selected clip's source app.
+                    guard press.modifiers.contains(.command) else { return .ignored }
+                    onIgnoreApp()
                     return .handled
                 }
                 .onKeyPress(characters: CharacterSet(charactersIn: "pP"), phases: .down) { press in
@@ -56,7 +63,7 @@ struct PanelView: View {
             }
 
             Divider()
-            HintFooter(canAutoPaste: canAutoPaste)
+            HintFooter(canAutoPaste: canAutoPaste, notice: model.notice)
         }
         .frame(width: PanelMetrics.size.width, height: PanelMetrics.size.height)
         .panelShell()
@@ -224,28 +231,41 @@ private struct AppIconView: View {
 
 private struct HintFooter: View {
     let canAutoPaste: Bool
+    let notice: String?
 
     var body: some View {
         HStack(spacing: 16) {
-            if canAutoPaste {
-                Text("↩ Paste")
+            if let notice {
+                // A one-off message replaces the hints until the user moves on.
+                Label(notice, systemImage: "info.circle.fill")
+                    .foregroundStyle(Color.accentColor)
             } else {
-                // Without the Accessibility permission Pastu can only copy; the user presses ⌘V themselves.
-                Label("↩ Copies only: enable Accessibility to auto-paste", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                hints
             }
-            Text("⌘1–9 Quick paste")
-            Text("⌘P Pin")
-            Text("⌘⌫ Delete")
-            Text("⇥ Filter")
-            Text("↑↓ Select")
-            Text("esc Close")
             Spacer()
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private var hints: some View {
+        if canAutoPaste {
+            Text("↩ Paste")
+        } else {
+            // Without the Accessibility permission Pastu can only copy; the user presses ⌘V themselves.
+            Label("↩ Copies only: enable Accessibility to auto-paste", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+        }
+        Text("⌘1–9 Quick paste")
+        Text("⌘P Pin")
+        Text("⌘⌫ Delete")
+        Text("⌘I Ignore app")
+        Text("⇥ Filter")
+        Text("↑↓ Select")
+        Text("esc Close")
     }
 }
 

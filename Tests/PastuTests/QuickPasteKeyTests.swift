@@ -105,7 +105,10 @@ extension ShellTests {
         await pump(0.2)
         #expect(model.filter == .all)
     }
-    /// Goes through PanelController, the real wiring, rather than a hand-assembled panel.
+    /// Goes through PanelController (the real wiring: controller -> panel callback -> model) and calls the
+    /// panel's performKeyEquivalent directly. NSApp.sendEvent would route ⌘ shortcuts to the KEY window, and
+    /// whether a window can become key depends on the desktop (a locked screen or an inactive session
+    /// makes this fail), which would make the test depend on the machine instead of the code.
     @Test func commandBackspaceDeletesTheSelectedClip() async throws {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
@@ -122,8 +125,10 @@ extension ShellTests {
         await pump()
         defer { controller.hide() }
 
-        NSApp.sendEvent(keyEvent("\u{7F}", keyCode: 51, modifiers: .command, window: controller.panel))
-        await pump(0.2)
+        let handled = controller.panel.performKeyEquivalent(
+            with: keyEvent("\u{7F}", keyCode: 51, modifiers: .command, window: controller.panel)
+        )
+        #expect(handled)
         #expect(model.clips.map(\.text) == ["newest", "oldest"])
     }
 
@@ -173,6 +178,53 @@ extension ShellTests {
         let handled = panel.performKeyEquivalent(with: keyEvent("\u{7F}", keyCode: 51, modifiers: .command, window: panel))
         #expect(handled)
         #expect(deletes == 1)
+    }
+    // MARK: Ignore the source app (⌘I)
+
+    private func controllerWithClips(app: String?) throws -> (PanelController, ClipListModel, IgnoredApps) {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let store = try ClipStore()
+        try store.insert(CapturedClip(text: "from a vault", sourceBundleIdentifier: app, date: Date(timeIntervalSince1970: 1)))
+        let model = ClipListModel(store: store)
+        let ignored = IgnoredApps(defaults: UserDefaults(suiteName: "pastu.test.\(UUID().uuidString)"))
+        let controller = PanelController(model: model, canAutoPaste: { true }, ignoredApps: ignored, onSelect: { _ in })
+        return (controller, model, ignored)
+    }
+
+    @Test func commandIIgnoresTheSelectedClipsSourceApp() async throws {
+        let (controller, model, ignored) = try controllerWithClips(app: "com.example.vault")
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+
+        NSApp.sendEvent(keyEvent("i", keyCode: 34, modifiers: .command, window: controller.panel))
+        await pump(0.2)
+        #expect(ignored.bundleIdentifiers == ["com.example.vault"])
+        #expect(model.notice?.contains("Ignoring") == true)
+    }
+
+    @Test func commandIWithAnUnknownSourceAppAddsNothingButExplainsWhy() async throws {
+        let (controller, model, ignored) = try controllerWithClips(app: nil)
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+
+        NSApp.sendEvent(keyEvent("i", keyCode: 34, modifiers: .command, window: controller.panel))
+        await pump(0.2)
+        #expect(ignored.bundleIdentifiers.isEmpty)
+        #expect(model.notice?.contains("unknown") == true)
+    }
+
+    @Test func plainIStaysInTheSearchField() async throws {
+        let (controller, _, ignored) = try controllerWithClips(app: "com.example.vault")
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+
+        NSApp.sendEvent(keyEvent("i", keyCode: 34, modifiers: [], window: controller.panel))
+        await pump(0.2)
+        #expect(ignored.bundleIdentifiers.isEmpty)
     }
 }
 }

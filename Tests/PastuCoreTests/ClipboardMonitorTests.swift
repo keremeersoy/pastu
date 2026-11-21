@@ -161,6 +161,26 @@ private final class FakeSource: ClipboardSource {
         #expect(received == ["while menu open"])
     }
 
+    // MARK: Ignored apps at runtime
+
+    @Test func ignoringAnAppLaterAppliesToTheNextCopies() {
+        let source = FakeSource()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0.text) }
+        let vault = "com.example.vault"
+
+        source.copy(PasteboardSnapshot(types: ["public.utf8-plain-text"], text: "before", sourceBundleIdentifier: vault))
+        monitor.poll()
+        #expect(received == ["before"])
+
+        monitor.filter.ignoredBundleIdentifiers.insert(vault)
+        let readsBefore = source.textReads
+        source.copy(PasteboardSnapshot(types: ["public.utf8-plain-text"], text: "after", sourceBundleIdentifier: vault))
+        monitor.poll()
+        #expect(received == ["before"])
+        #expect(source.textReads == readsBefore)   // the content of the ignored app was never read
+    }
+
     // MARK: Pause
 
     @Test func copiesMadeWhilePausedAreNeitherCapturedNorRead() {

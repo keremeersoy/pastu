@@ -11,6 +11,7 @@ public final class ClipListModel {
     public var query = "" {
         didSet {
             guard query != oldValue else { return }
+            notice = nil
             selectedIndex = 0
             reload()
         }
@@ -20,10 +21,15 @@ public final class ClipListModel {
     public var filter = ClipFilter.all {
         didSet {
             guard filter != oldValue else { return }
+            notice = nil
             selectedIndex = 0
             reload()
         }
     }
+
+    /// A short message for the panel footer ("Ignoring Safari"). It disappears as soon as the user moves on:
+    /// when the selection moves or the query or filter changes.
+    public var notice: String?
 
     @ObservationIgnored private let store: ClipStore
     @ObservationIgnored private let limit: Int
@@ -73,6 +79,7 @@ public final class ClipListModel {
     }
 
     public func moveSelection(by delta: Int) {
+        notice = nil
         guard !clips.isEmpty else { return }
         selectedIndex = min(max(selectedIndex + delta, 0), clips.count - 1)
     }
