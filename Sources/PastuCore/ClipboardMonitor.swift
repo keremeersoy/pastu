@@ -5,6 +5,8 @@ import Foundation
 public protocol ClipboardSource: AnyObject {
     var changeCount: Int { get }
     func snapshot() -> PasteboardSnapshot
+    /// Replaces the pasteboard contents with plain text.
+    func write(text: String)
 }
 
 /// A copy that passed the privacy filter.
@@ -46,6 +48,13 @@ public final class ClipboardMonitor {
     public func stop() {
         timer?.invalidate()
         timer = nil
+    }
+
+    /// Puts text on the pasteboard without Pastu capturing its own write
+    /// (otherwise every paste from the panel would be recorded as a new copy).
+    public func copyToPasteboard(_ text: String) {
+        source.write(text: text)
+        lastChangeCount = source.changeCount
     }
 
     public func poll() {

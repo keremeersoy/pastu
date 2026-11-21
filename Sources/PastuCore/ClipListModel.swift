@@ -34,6 +34,14 @@ public final class ClipListModel {
         reload()
     }
 
+    /// Jumps to a row (used by ⌘1-9). Returns false, leaving the selection alone, when the row does not exist.
+    @discardableResult
+    public func select(row: Int) -> Bool {
+        guard clips.indices.contains(row) else { return false }
+        selectedIndex = row
+        return true
+    }
+
     public func moveSelection(by delta: Int) {
         guard !clips.isEmpty else { return }
         selectedIndex = min(max(selectedIndex + delta, 0), clips.count - 1)

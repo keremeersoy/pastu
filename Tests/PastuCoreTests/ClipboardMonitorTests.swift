@@ -12,6 +12,10 @@ private final class FakeSource: ClipboardSource {
     }
 
     func snapshot() -> PasteboardSnapshot { current }
+
+    func write(text: String) {
+        copy(PasteboardSnapshot(types: ["public.utf8-plain-text"], text: text))
+    }
 }
 
 @MainActor
@@ -63,5 +67,35 @@ private final class FakeSource: ClipboardSource {
 
         monitor.poll()
         #expect(received.isEmpty)
+    }
+
+    @Test func copyToPasteboardWritesTheText() {
+        let source = FakeSource()
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { _ in }
+
+        monitor.copyToPasteboard("picked from panel")
+        #expect(source.snapshot().text == "picked from panel")
+    }
+
+    @Test func ownWriteIsNotCapturedAgain() {
+        let source = FakeSource()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0.text) }
+
+        monitor.copyToPasteboard("picked from panel")
+        monitor.poll()
+        #expect(received.isEmpty)
+    }
+
+    @Test func copyAfterOwnWriteIsStillCaptured() {
+        let source = FakeSource()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0.text) }
+
+        monitor.copyToPasteboard("picked from panel")
+        monitor.poll()
+        source.copy(plain("user copied this"))
+        monitor.poll()
+        #expect(received == ["user copied this"])
     }
 }

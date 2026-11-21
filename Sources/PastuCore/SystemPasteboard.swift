@@ -9,6 +9,11 @@ public final class SystemPasteboard: ClipboardSource {
 
     public var changeCount: Int { pasteboard.changeCount }
 
+    public func write(text: String) {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
     public func snapshot() -> PasteboardSnapshot {
         PasteboardSnapshot(
             types: (pasteboard.types ?? []).map(\.rawValue),

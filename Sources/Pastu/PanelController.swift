@@ -8,12 +8,15 @@ final class PanelController: NSObject, NSWindowDelegate {
     private static let size = NSSize(width: 640, height: 420)
 
     private let model: ClipListModel
+    private let onSelect: (StoredClip) -> Void
     private let panel = ClipPanel(size: PanelController.size)
 
     var isVisible: Bool { panel.isVisible }
 
-    init(model: ClipListModel) {
+    /// - Parameter onSelect: called after the panel closed, with the clip the user picked.
+    init(model: ClipListModel, onSelect: @escaping (StoredClip) -> Void) {
         self.model = model
+        self.onSelect = onSelect
         super.init()
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.hide() }
@@ -28,11 +31,17 @@ final class PanelController: NSObject, NSWindowDelegate {
         model.refresh()
         // A fresh view each time resets focus and scroll position.
         panel.contentView = NSHostingView(rootView: PanelView(model: model, onSubmit: { [weak self] in
-            // Pasting the selection comes in the next step; for now Return just closes the panel.
-            self?.hide()
+            self?.submit()
         }))
         panel.setFrameOrigin(origin(on: screenUnderMouse()))
         panel.makeKeyAndOrderFront(nil)
+    }
+
+    /// Closes the panel, then hands the selected clip over (so focus is back in the previous app).
+    private func submit() {
+        let clip = model.selectedClip
+        hide()
+        if let clip { onSelect(clip) }
     }
 
     func hide() {

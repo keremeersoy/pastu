@@ -17,6 +17,14 @@ struct PanelView: View {
                 .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
                 .onKeyPress(.downArrow) { model.moveSelection(by: 1); return .handled }
                 .onKeyPress(.return) { onSubmit(); return .handled }
+                .onKeyPress(characters: .decimalDigits, phases: .down) { press in
+                    // ⌘1-9 pastes the nth row directly.
+                    guard press.modifiers.contains(.command),
+                          let digit = Int(press.characters), (1...9).contains(digit),
+                          model.select(row: digit - 1) else { return .ignored }
+                    onSubmit()
+                    return .handled
+                }
 
             Divider()
 
@@ -38,7 +46,7 @@ struct PanelView: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(model.clips.enumerated()), id: \.element.id) { index, clip in
-                        ClipRow(clip: clip, isSelected: index == model.selectedIndex)
+                        ClipRow(clip: clip, isSelected: index == model.selectedIndex, shortcutDigit: index < 9 ? index + 1 : nil)
                             .id(clip.id)
                     }
                 }
@@ -54,11 +62,19 @@ struct PanelView: View {
 private struct ClipRow: View {
     let clip: StoredClip
     let isSelected: Bool
+    let shortcutDigit: Int?
 
     var body: some View {
-        Text(clip.text.replacingOccurrences(of: "\n", with: " "))
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HStack {
+            Text(clip.text.replacingOccurrences(of: "\n", with: " "))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let shortcutDigit {
+                Text("⌘\(shortcutDigit)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(

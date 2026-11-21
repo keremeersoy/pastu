@@ -15,7 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let store = try ClipStore(path: Self.databasePath())
             self.store = store
             let model = ClipListModel(store: store)
-            let panelController = PanelController(model: model)
+            let panelController = PanelController(model: model) { [weak self] clip in
+                self?.paste(clip)
+            }
             self.panelController = panelController
 
             let monitor = ClipboardMonitor(source: SystemPasteboard(), filter: PrivacyFilter()) { [weak self] clip in
@@ -35,6 +37,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if hotKey == nil { NSLog("Pastu could not register its global hotkey") }
 
         setUpStatusItem()
+    }
+
+    private var didPromptForAccessibility = false
+
+    /// Puts the clip on the pasteboard and sends ⌘V to the app the user came from.
+    private func paste(_ clip: StoredClip) {
+        monitor?.copyToPasteboard(clip.text)
+
+        guard PasteSender.isTrusted else {
+            // The text is already on the clipboard, so a manual ⌘V still works.
+            if !didPromptForAccessibility {
+                didPromptForAccessibility = true
+                PasteSender.requestTrust()
+            }
+            return
+        }
+        Task { @MainActor in
+            // Give the panel a moment to disappear so the key event reaches the previous app.
+            try? await Task.sleep(for: .milliseconds(80))
+            PasteSender.sendCommandV()
+        }
     }
 
     @objc private func togglePanel() {

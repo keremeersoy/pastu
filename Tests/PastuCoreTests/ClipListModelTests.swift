@@ -76,4 +76,18 @@ import Testing
         #expect(model.clips.map(\.text) == ["c"])
         #expect(model.selectedIndex == 0)
     }
+
+    @Test func selectRowJumpsToExistingRow() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b", "c"]))
+        #expect(model.select(row: 2) == true)
+        #expect(model.selectedClip?.text == "a")
+    }
+
+    @Test func selectRowIgnoresMissingRows() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b"]))
+        model.moveSelection(by: 1)
+        #expect(model.select(row: 5) == false)
+        #expect(model.select(row: -1) == false)
+        #expect(model.selectedIndex == 1)
+    }
 }
