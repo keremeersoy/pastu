@@ -11,7 +11,13 @@ private final class FakeSource: ClipboardSource {
         changeCount += 1
     }
 
-    func snapshot() -> PasteboardSnapshot { current }
+    private(set) var textReads = 0
+
+    func snapshot(includingText: Bool) -> PasteboardSnapshot {
+        var result = current
+        if includingText { textReads += 1 } else { result.text = nil }
+        return result
+    }
 
     func write(text: String) {
         copy(PasteboardSnapshot(types: ["public.utf8-plain-text"], text: text))
@@ -74,7 +80,7 @@ private final class FakeSource: ClipboardSource {
         let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { _ in }
 
         monitor.copyToPasteboard("picked from panel")
-        #expect(source.snapshot().text == "picked from panel")
+        #expect(source.snapshot(includingText: true).text == "picked from panel")
     }
 
     @Test func ownWriteIsNotCapturedAgain() {
@@ -97,5 +103,41 @@ private final class FakeSource: ClipboardSource {
         source.copy(plain("user copied this"))
         monitor.poll()
         #expect(received == ["user copied this"])
+    }
+
+    @Test func concealedContentIsNeverRead() {
+        let source = FakeSource()
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { _ in }
+
+        source.copy(PasteboardSnapshot(
+            types: ["public.utf8-plain-text", "org.nspasteboard.ConcealedType"],
+            text: "hunter2"
+        ))
+        monitor.poll()
+        #expect(source.textReads == 0)
+    }
+
+    @Test func contentFromIgnoredAppIsNeverRead() {
+        let source = FakeSource()
+        let monitor = ClipboardMonitor(
+            source: source,
+            filter: PrivacyFilter(ignoredBundleIdentifiers: ["com.example.vault"])
+        ) { _ in }
+
+        source.copy(PasteboardSnapshot(
+            types: ["public.utf8-plain-text"], text: "secret",
+            sourceBundleIdentifier: "com.example.vault"
+        ))
+        monitor.poll()
+        #expect(source.textReads == 0)
+    }
+
+    @Test func ordinaryContentIsReadExactlyOnce() {
+        let source = FakeSource()
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { _ in }
+
+        source.copy(plain("hello"))
+        monitor.poll()
+        #expect(source.textReads == 1)
     }
 }

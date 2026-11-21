@@ -83,6 +83,16 @@ public final class ClipStore {
             """, limit: limit, match: match)
     }
 
+    /// Marks a clip as just used (e.g. pasted from the panel): moves it to the top
+    /// without counting as a new copy.
+    public func markUsed(id: Int64, at date: Date = Date()) throws {
+        let stmt = try prepare("UPDATE clips SET last_copied_at = ?2 WHERE id = ?1")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, id)
+        sqlite3_bind_double(stmt, 2, date.timeIntervalSince1970)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
+    }
+
     public func delete(id: Int64) throws {
         let stmt = try prepare("DELETE FROM clips WHERE id = ?1")
         defer { sqlite3_finalize(stmt) }

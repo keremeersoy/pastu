@@ -43,4 +43,16 @@ import Testing
         #expect(filter.decision(for: empty) == .skip(.empty))
         #expect(filter.decision(for: none) == .skip(.empty))
     }
+
+    @Test func contentOfSensitiveItemsMustNotBeRead() {
+        let filter = PrivacyFilter(ignoredBundleIdentifiers: ["com.example.vault"])
+        let concealed = PasteboardSnapshot(types: ["org.nspasteboard.ConcealedType"], text: nil)
+        let transient = PasteboardSnapshot(types: ["org.nspasteboard.TransientType"], text: nil)
+        let vault = PasteboardSnapshot(types: ["public.utf8-plain-text"], text: nil, sourceBundleIdentifier: "com.example.vault")
+        let ordinary = PasteboardSnapshot(types: ["public.utf8-plain-text"], text: nil)
+        #expect(filter.shouldReadContent(of: concealed) == false)
+        #expect(filter.shouldReadContent(of: transient) == false)
+        #expect(filter.shouldReadContent(of: vault) == false)
+        #expect(filter.shouldReadContent(of: ordinary) == true)
+    }
 }

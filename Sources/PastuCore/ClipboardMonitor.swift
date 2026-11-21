@@ -4,7 +4,8 @@ import Foundation
 @MainActor
 public protocol ClipboardSource: AnyObject {
     var changeCount: Int { get }
-    func snapshot() -> PasteboardSnapshot
+    /// With `includingText: false` only metadata (types, source app) is read, never the content.
+    func snapshot(includingText: Bool) -> PasteboardSnapshot
     /// Replaces the pasteboard contents with plain text.
     func write(text: String)
 }
@@ -62,7 +63,9 @@ public final class ClipboardMonitor {
         guard count != lastChangeCount else { return }
         lastChangeCount = count
 
-        let snapshot = source.snapshot()
+        // Look at metadata first: never read the content of concealed/transient/ignored-app copies.
+        guard filter.shouldReadContent(of: source.snapshot(includingText: false)) else { return }
+        let snapshot = source.snapshot(includingText: true)
         guard filter.decision(for: snapshot) == .record, let text = snapshot.text else { return }
         onCapture(CapturedClip(
             text: text,

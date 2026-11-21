@@ -3,12 +3,14 @@ import Carbon.HIToolbox
 import PastuCore
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var store: ClipStore?
     private var monitor: ClipboardMonitor?
     private var panelController: PanelController?
     private var hotKey: GlobalHotKey?
+    private let systemPasteboard = SystemPasteboard()
+    private var accessWarningItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -20,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.panelController = panelController
 
-            let monitor = ClipboardMonitor(source: SystemPasteboard(), filter: PrivacyFilter()) { [weak self] clip in
+            let monitor = ClipboardMonitor(source: systemPasteboard, filter: PrivacyFilter()) { [weak self] clip in
                 _ = try? store.insert(clip)
                 if self?.panelController?.isVisible == true { model.refresh() }
             }
@@ -44,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Puts the clip on the pasteboard and sends ⌘V to the app the user came from.
     private func paste(_ clip: StoredClip) {
         monitor?.copyToPasteboard(clip.text)
+        try? store?.markUsed(id: clip.id)
 
         guard PasteSender.isTrusted else {
             // The text is already on the clipboard, so a manual ⌘V still works.
@@ -60,8 +63,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func openPrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     @objc private func togglePanel() {
         panelController?.toggle()
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        accessWarningItem?.isHidden = !systemPasteboard.isAccessDenied
     }
 
     private func setUpStatusItem() {
@@ -72,6 +85,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         let menu = NSMenu()
+        let warning = NSMenuItem(
+            title: "Clipboard access is denied — open Privacy settings…",
+            action: #selector(openPrivacySettings), keyEquivalent: ""
+        )
+        warning.target = self
+        warning.isHidden = true
+        menu.addItem(warning)
+        accessWarningItem = warning
+        menu.delegate = self
+
         menu.addItem(withTitle: "Show \(PastuInfo.name)", action: #selector(togglePanel), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())

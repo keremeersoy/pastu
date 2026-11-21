@@ -92,6 +92,28 @@ import Testing
         #expect(try store.search("gone").isEmpty)
     }
 
+    @Test func markUsedMovesClipToTopWithoutCountingAsCopy() throws {
+        let store = try ClipStore()
+        let oldID = try store.insert(clip("old", at: 100))
+        try store.insert(clip("new", at: 200))
+        try store.markUsed(id: oldID, at: Date(timeIntervalSince1970: 300))
+
+        let clips = try store.recent()
+        #expect(clips.map(\.text) == ["old", "new"])
+        let old = try #require(clips.first)
+        #expect(old.copyCount == 1)
+        #expect(old.lastCopiedAt == Date(timeIntervalSince1970: 300))
+        #expect(old.firstCopiedAt == Date(timeIntervalSince1970: 100))
+    }
+
+    @Test func markUsedKeepsSearchIndexInSync() throws {
+        let store = try ClipStore()
+        let id = try store.insert(clip("findable", at: 1))
+        try store.markUsed(id: id, at: Date(timeIntervalSince1970: 2))
+        try store.verifyIntegrity()
+        #expect(try store.search("findable").count == 1)
+    }
+
     @Test func searchIndexStaysInSyncWithTable() throws {
         let store = try ClipStore()
         let id = try store.insert(clip("temporary", at: 1))
