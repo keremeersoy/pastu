@@ -123,7 +123,8 @@ Being honest about what has and has not been checked:
   Clear history alert, the Ignored apps submenu), ⌘⌫ and ⌘I on a real keyboard, multiple displays, full-screen
   apps and Spaces.
 - **macOS 15.4+ clipboard privacy prompt**: how macOS asks about Pastu's clipboard access has not been observed.
-- **Build**: only built against the macOS 27.2 SDK so far; building with exactly the macOS 26 SDK has not been tried.
+- **Build**: CI builds and runs all tests (including the ones that open real windows) on GitHub's macOS 26 runner
+  with Xcode 26.6 / macOS 26.5 SDK. Other Xcode versions have not been tried.
 - **Performance**: panel-open latency has not been measured.
 - The source app of a clip is a best guess (the frontmost app when the copy was noticed).
 - Search terms shorter than 3 characters are case-insensitive for ASCII letters only.

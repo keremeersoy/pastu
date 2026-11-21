@@ -35,8 +35,8 @@ jobs:
           xcodebuild -version
           swift --version
           xcrun --show-sdk-version
-      # Shell tests open real AppKit windows; this needs a GUI login session (hosted macOS runners
-      # provide one). Unverified for this repo until the first CI run.
+      # Shell tests open real AppKit windows; this needs a GUI login session. Hosted macOS runners provide one
+      # (verified: all tests passed on macos-26 with Xcode 26.6 on 2026-11-21).
       - name: Test
         run: swift test
       - name: Build app bundle (ad-hoc signed)
