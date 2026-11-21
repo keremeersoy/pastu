@@ -166,7 +166,7 @@ private final class FakeSource: ClipboardSource {
         // The timer still has to fire in the tracking mode for this to pass.
         let deadline = Date().addingTimeInterval(2)
         while received.isEmpty, Date() < deadline {
-            RunLoop.current.run(mode: RunLoop.Mode("pastu.test.tracking"), before: deadline)
+            RunLoop.current.run(mode: RunLoop.Mode("pastu.test.tracking"), before: Date().addingTimeInterval(0.05))
         }
         #expect(received == ["while menu open"])
     }
