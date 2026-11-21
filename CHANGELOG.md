@@ -2,9 +2,13 @@
 
 All notable changes to Pastu are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
-will follow [Semantic Versioning](https://semver.org/) once it has a first release.
+follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-11-21
+
+First public prerelease (early prototype). Not notarized; see the release notes for first-launch steps.
 
 ### Added
 - Menu bar app that records copied text and keeps it in a local SQLite database.
