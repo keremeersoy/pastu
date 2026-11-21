@@ -15,11 +15,15 @@ private final class FakeSource: ClipboardSource {
     private(set) var textReads = 0
     private(set) var snapshotCalls = 0
 
-    func snapshot(includingText: Bool) -> PasteboardSnapshot {
+    func snapshot(includingContent: Bool) -> PasteboardSnapshot {
         snapshotCalls += 1
         var result = current
-        if includingText { textReads += 1 } else { result.text = nil }
+        if includingContent { textReads += 1 } else { result.text = nil; result.imagePNG = nil }
         return result
+    }
+
+    func write(imagePNG: Data) {
+        copy(PasteboardSnapshot(types: ["public.png"], text: nil, imagePNG: imagePNG))
     }
 
     func write(text: String) {
@@ -83,7 +87,7 @@ private final class FakeSource: ClipboardSource {
         let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { _ in }
 
         monitor.copyToPasteboard("picked from panel")
-        #expect(source.snapshot(includingText: true).text == "picked from panel")
+        #expect(source.snapshot(includingContent: true).text == "picked from panel")
     }
 
     @Test func ownWriteIsNotCapturedAgain() {
@@ -159,6 +163,88 @@ private final class FakeSource: ClipboardSource {
         CFRunLoopAddCommonMode(CFRunLoopGetMain(), trackingMode)
         RunLoop.current.run(mode: RunLoop.Mode("pastu.test.tracking"), before: Date().addingTimeInterval(0.3))
         #expect(received == ["while menu open"])
+    }
+
+    // MARK: Pictures
+
+    private func picture(_ seed: UInt8 = 1, bytes: Int = 100, text: String? = nil, app: String? = nil,
+                         types: [String] = ["public.png"]) -> PasteboardSnapshot {
+        PasteboardSnapshot(types: types, text: text, sourceBundleIdentifier: app, imagePNG: Data(repeating: seed, count: bytes))
+    }
+
+    @Test func capturesAPictureCopy() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+
+        source.copy(picture(5, app: "com.apple.screencaptureui"))
+        monitor.poll()
+        #expect(received.count == 1)
+        #expect(received.first?.imagePNG == Data(repeating: 5, count: 100))
+        #expect(received.first?.text.hasPrefix("[image] ") == true)
+        #expect(received.first?.sourceBundleIdentifier == "com.apple.screencaptureui")
+    }
+
+    @Test func textWinsWhenTheCopyHasBothTextAndAPicture() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+
+        source.copy(picture(text: "Figure 3: results", types: ["public.png", "public.utf8-plain-text"]))
+        monitor.poll()
+        #expect(received.count == 1)
+        #expect(received.first?.text == "Figure 3: results")
+        #expect(received.first?.imagePNG == nil)
+    }
+
+    @Test func aConcealedPictureIsNeverRead() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+
+        source.copy(picture(types: ["public.png", "org.nspasteboard.ConcealedType"]))
+        monitor.poll()
+        #expect(received.isEmpty)
+        #expect(source.textReads == 0)
+    }
+
+    @Test func aPictureFromAnIgnoredAppIsNeverRead() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(
+            source: source, filter: PrivacyFilter(ignoredBundleIdentifiers: ["com.example.vault"])
+        ) { received.append($0) }
+
+        source.copy(picture(app: "com.example.vault"))
+        monitor.poll()
+        #expect(received.isEmpty)
+        #expect(source.textReads == 0)
+    }
+
+    @Test func anOversizedPictureIsNotCaptured() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter(maxImageBytes: 50)) { received.append($0) }
+
+        source.copy(picture(bytes: 51))
+        monitor.poll()
+        #expect(received.isEmpty)
+    }
+
+    @Test func copyingAPictureToThePasteboardWritesItAndIsNotRecaptured() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        let data = Data(repeating: 9, count: 100)
+
+        monitor.copyToPasteboard(imagePNG: data)
+        #expect(source.snapshot(includingContent: true).imagePNG == data)
+        monitor.poll()
+        #expect(received.isEmpty)
+
+        source.copy(picture(3))
+        monitor.poll()
+        #expect(received.count == 1)   // a later, real copy is still captured
     }
 
     // MARK: Ignored apps at runtime

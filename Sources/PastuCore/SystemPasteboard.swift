@@ -21,10 +21,13 @@ public final class SystemPasteboard: ClipboardSource {
         pasteboard.setString(text, forType: .string)
     }
 
-    public func snapshot(includingText: Bool) -> PasteboardSnapshot {
+    /// STUB: pictures are written in the next sub-step.
+    public func write(imagePNG: Data) {}
+
+    public func snapshot(includingContent: Bool) -> PasteboardSnapshot {
         PasteboardSnapshot(
             types: (pasteboard.types ?? []).map(\.rawValue),
-            text: includingText ? pasteboard.string(forType: .string) : nil,
+            text: includingContent ? pasteboard.string(forType: .string) : nil,
             sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         )
     }

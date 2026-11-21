@@ -5,10 +5,12 @@ import Foundation
 @MainActor
 public protocol ClipboardSource: AnyObject {
     var changeCount: Int { get }
-    /// With `includingText: false` only metadata (types, source app) is read, never the content.
-    func snapshot(includingText: Bool) -> PasteboardSnapshot
+    /// With `includingContent: false` only metadata (types, source app) is read, never the content.
+    func snapshot(includingContent: Bool) -> PasteboardSnapshot
     /// Replaces the pasteboard contents with plain text.
     func write(text: String)
+    /// Replaces the pasteboard contents with a picture.
+    func write(imagePNG: Data)
 }
 
 /// A copy that passed the privacy filter.
@@ -79,6 +81,12 @@ public final class ClipboardMonitor {
         lastChangeCount = source.changeCount
     }
 
+    /// Puts a picture on the pasteboard without capturing our own write.
+    public func copyToPasteboard(imagePNG: Data) {
+        source.write(imagePNG: imagePNG)
+        lastChangeCount = source.changeCount
+    }
+
     public func poll() {
         let count = source.changeCount
         guard count != lastChangeCount else { return }
@@ -88,13 +96,14 @@ public final class ClipboardMonitor {
         guard !recording.isPaused else { return }
 
         // Look at metadata first: never read the content of concealed/transient/ignored-app copies.
-        guard filter.shouldReadContent(of: source.snapshot(includingText: false)) else { return }
-        let snapshot = source.snapshot(includingText: true)
-        guard filter.decision(for: snapshot) == .record, let text = snapshot.text else { return }
-        onCapture(CapturedClip(
-            text: text,
-            sourceBundleIdentifier: snapshot.sourceBundleIdentifier,
-            date: Date()
-        ))
+        guard filter.shouldReadContent(of: source.snapshot(includingContent: false)) else { return }
+        let snapshot = source.snapshot(includingContent: true)
+        guard filter.decision(for: snapshot) == .record else { return }
+
+        if let text = snapshot.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            onCapture(CapturedClip(text: text, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date()))
+        } else if let png = snapshot.imagePNG {
+            onCapture(.image(png: png, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date()))
+        }
     }
 }

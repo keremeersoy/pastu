@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import PastuCore
 
@@ -79,5 +80,48 @@ import Testing
             text: String(repeating: "a", count: PrivacyFilter.defaultMaxTextBytes + 1)
         )
         #expect(PrivacyFilter().decision(for: huge) == .skip(.tooLarge))
+    }
+
+    // MARK: Images
+
+    private func imageSnapshot(
+        _ bytes: Int = 10, text: String? = nil, types: [String] = ["public.png"], app: String? = nil
+    ) -> PasteboardSnapshot {
+        PasteboardSnapshot(types: types, text: text, sourceBundleIdentifier: app, imagePNG: Data(repeating: 7, count: bytes))
+    }
+
+    @Test func recordsAPictureWhenThereIsNoText() {
+        #expect(PrivacyFilter().decision(for: imageSnapshot()) == .record)
+    }
+
+    @Test func whitespaceOnlyTextDoesNotHideThePicture() {
+        #expect(PrivacyFilter().decision(for: imageSnapshot(text: "  \n ")) == .record)
+    }
+
+    @Test func emptyPictureDataIsEmpty() {
+        let empty = PasteboardSnapshot(types: ["public.png"], text: nil, imagePNG: Data())
+        #expect(PrivacyFilter().decision(for: empty) == .skip(.empty))
+    }
+
+    @Test func skipsPicturesLargerThanTheLimit() {
+        let filter = PrivacyFilter(maxImageBytes: 100)
+        #expect(filter.decision(for: imageSnapshot(100)) == .record)
+        #expect(filter.decision(for: imageSnapshot(101)) == .skip(.tooLarge))
+    }
+
+    @Test func defaultFilterHasAPictureSizeLimit() {
+        let huge = imageSnapshot(PrivacyFilter.defaultMaxImageBytes + 1)
+        #expect(PrivacyFilter().decision(for: huge) == .skip(.tooLarge))
+    }
+
+    @Test func picturesFollowThePrivacyRulesToo() {
+        let filter = PrivacyFilter(ignoredBundleIdentifiers: ["com.example.vault"])
+        let concealed = imageSnapshot(types: ["public.png", "org.nspasteboard.ConcealedType"])
+        let transient = imageSnapshot(types: ["public.png", "org.nspasteboard.TransientType"])
+        let vault = imageSnapshot(app: "com.example.vault")
+        #expect(filter.decision(for: concealed) == .skip(.concealed))
+        #expect(filter.decision(for: transient) == .skip(.transient))
+        #expect(filter.decision(for: vault) == .skip(.ignoredApp))
+        #expect(filter.shouldReadContent(of: concealed) == false)
     }
 }

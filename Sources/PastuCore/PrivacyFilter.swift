@@ -22,15 +22,21 @@ public struct PrivacyFilter: Sendable {
     /// Copies larger than this (UTF-8 bytes) are not recorded: one huge copy must not bloat the database and search index.
     public static let defaultMaxTextBytes = 1_000_000
 
+    /// Pictures larger than this (PNG bytes) are not recorded: a few big screenshots must not fill the history.
+    public static let defaultMaxImageBytes = 10_000_000
+
     public var ignoredBundleIdentifiers: Set<String>
     public var maxTextBytes: Int
+    public var maxImageBytes: Int
 
     public init(
         ignoredBundleIdentifiers: Set<String> = [],
-        maxTextBytes: Int = PrivacyFilter.defaultMaxTextBytes
+        maxTextBytes: Int = PrivacyFilter.defaultMaxTextBytes,
+        maxImageBytes: Int = PrivacyFilter.defaultMaxImageBytes
     ) {
         self.ignoredBundleIdentifiers = ignoredBundleIdentifiers
         self.maxTextBytes = maxTextBytes
+        self.maxImageBytes = maxImageBytes
     }
 
     /// Whether the content of this item may be read at all. Decided from metadata only,
@@ -41,12 +47,14 @@ public struct PrivacyFilter: Sendable {
 
     public func decision(for snapshot: PasteboardSnapshot) -> Decision {
         if let reason = metadataSkipReason(for: snapshot) { return .skip(reason) }
-        guard let text = snapshot.text,
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .skip(.empty)
+        // Text wins when a copy carries both text and a picture (browsers, office apps), so the clip stays searchable.
+        if let text = snapshot.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return text.utf8.count > maxTextBytes ? .skip(.tooLarge) : .record
         }
-        if text.utf8.count > maxTextBytes { return .skip(.tooLarge) }
-        return .record
+        if let png = snapshot.imagePNG, !png.isEmpty {
+            return png.count > maxImageBytes ? .skip(.tooLarge) : .record
+        }
+        return .skip(.empty)
     }
 
     private func metadataSkipReason(for snapshot: PasteboardSnapshot) -> SkipReason? {
