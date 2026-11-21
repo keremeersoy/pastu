@@ -1,0 +1,86 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds Pastu.app, zips it and publishes a GitHub prerelease with the zip and its
+# SHA-256. Uses only the built-in GITHUB_TOKEN; no other secrets. The build is ad-hoc signed, not notarized.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26+
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XCODE" ]; then
+            echo "No Xcode 26 found on this runner:"; ls -d /Applications/Xcode*; exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+      - name: Read version from the tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "Tag $GITHUB_REF_NAME is not vX.Y.Z"; exit 1
+          fi
+          PLIST="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)"
+          if [ "$PLIST" != "$VERSION" ]; then
+            echo "Resources/Info.plist says $PLIST but the tag says $VERSION"; exit 1
+          fi
+          grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG.md has no [$VERSION] section"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Test
+        run: swift test
+      - name: Build app bundle (ad-hoc signed)
+        run: VERSION="${{ steps.version.outputs.version }}" ./scripts/build-app.sh
+      - name: Package
+        id: package
+        run: |
+          ZIP="Pastu-${{ steps.version.outputs.version }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent build/Pastu.app "$ZIP"
+          shasum -a 256 "$ZIP" | tee "$ZIP.sha256"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "sha=$(cut -d' ' -f1 "$ZIP.sha256")" >> "$GITHUB_OUTPUT"
+      - name: Write release notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          {
+            echo "> **Early prototype.** This build is **not signed with an Apple Developer ID and not notarized**."
+            echo "> On first launch macOS will say it cannot verify the developer: open **System Settings → Privacy & Security**,"
+            echo "> click **Open Anyway** for Pastu and confirm. Do not disable Gatekeeper. Requires **macOS 15+**, Apple Silicon."
+            echo ""
+            echo "SHA-256 of \`${{ steps.package.outputs.zip }}\`: \`${{ steps.package.outputs.sha }}\`"
+            echo ""
+            awk -v v="$VERSION" '
+              $0 ~ "^## \\[" v "\\]" { on = 1; next }
+              on && /^## \[/ { exit }
+              on && /^\[.*\]: / { exit }
+              on { print }
+            ' CHANGELOG.md
+            echo ""
+            echo "### Known limitations and unverified areas"
+            echo "See the [README](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/README.md#known-limitations-and-unverified-areas)."
+          } > notes.md
+          cat notes.md
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.package.outputs.zip }}" "${{ steps.package.outputs.zip }}.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Pastu ${{ steps.version.outputs.version }}" \
+            --notes-file notes.md \
+            --prerelease --verify-tag
