@@ -48,6 +48,7 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// The filter Tab moves to, wrapping around to `.all`.
     public var next: ClipFilter {
         switch self {
         case .all: .text
@@ -57,6 +58,7 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// The label shown on the filter chip.
     public var title: String {
         switch self {
         case .all: "All"

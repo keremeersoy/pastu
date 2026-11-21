@@ -32,6 +32,7 @@ public struct RetentionPolicy: Equatable, Sendable {
     }
 }
 
+/// A failed SQLite call. Carries SQLite's own message, which never includes clip text, so it is safe to log.
 public struct ClipStoreError: Error, CustomStringConvertible {
     public let code: Int32
     public let message: String
@@ -107,6 +108,7 @@ public final class ClipStore {
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
     }
 
+    /// Removes one clip (⌘⌫ in the panel). With `secure_delete` on, its text is overwritten on disk.
     public func delete(id: Int64) throws {
         let stmt = try prepare("DELETE FROM clips WHERE id = ?1")
         defer { sqlite3_finalize(stmt) }

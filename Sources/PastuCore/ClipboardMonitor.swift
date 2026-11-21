@@ -58,6 +58,8 @@ public final class ClipboardMonitor {
         self.lastChangeCount = source.changeCount
     }
 
+    /// Polls `changeCount` on a timer. macOS has no clipboard-change notification, so polling is the only option;
+    /// reading an integer twice a second costs next to nothing.
     public func start(interval: TimeInterval = 0.5) {
         stop()
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
@@ -69,6 +71,7 @@ public final class ClipboardMonitor {
         self.timer = timer
     }
 
+    /// Stops polling. Safe to call when not started.
     public func stop() {
         timer?.invalidate()
         timer = nil
@@ -87,6 +90,7 @@ public final class ClipboardMonitor {
         lastChangeCount = source.changeCount
     }
 
+    /// Checks the pasteboard once. Public so tests can drive the monitor without a timer.
     public func poll() {
         let count = source.changeCount
         guard count != lastChangeCount else { return }

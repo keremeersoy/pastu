@@ -3,6 +3,7 @@
 /// Password managers mark sensitive copies with the community-standard
 /// types from nspasteboard.org; those must never be stored.
 public struct PrivacyFilter: Sendable {
+    /// Why a copy was not recorded. Kept distinct so tests can prove each privacy rule on its own.
     public enum SkipReason: Equatable, Sendable {
         case concealed
         case transient
@@ -11,11 +12,13 @@ public struct PrivacyFilter: Sendable {
         case tooLarge
     }
 
+    /// The verdict for one pasteboard change.
     public enum Decision: Equatable, Sendable {
         case record
         case skip(SkipReason)
     }
 
+    /// Marker types from nspasteboard.org: password managers set them on secrets and one-off values.
     public static let concealedType = "org.nspasteboard.ConcealedType"
     public static let transientType = "org.nspasteboard.TransientType"
 
@@ -45,6 +48,7 @@ public struct PrivacyFilter: Sendable {
         metadataSkipReason(for: snapshot) == nil
     }
 
+    /// The final verdict, once the content has been read: privacy markers, emptiness and size limits.
     public func decision(for snapshot: PasteboardSnapshot) -> Decision {
         if let reason = metadataSkipReason(for: snapshot) { return .skip(reason) }
         // Text wins when a copy carries both text and a picture (browsers, office apps), so the clip stays searchable.

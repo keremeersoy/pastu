@@ -17,6 +17,7 @@ public final class RecordingState {
         self.isPaused = store?.bool(forKey: Self.key) ?? false
     }
 
+    /// Flips between recording and paused (the menu's Pause/Resume item).
     public func toggle() {
         isPaused.toggle()
     }

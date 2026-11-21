@@ -27,6 +27,7 @@ public final class IgnoredApps {
         return true
     }
 
+    /// Starts recording that app again from the next copy. Unknown identifiers are a no-op.
     public func remove(_ bundleIdentifier: String) {
         guard bundleIdentifiers.remove(bundleIdentifier) != nil else { return }
         changed()

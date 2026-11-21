@@ -78,6 +78,7 @@ public final class ClipListModel {
         reload()   // clamps the selection into range
     }
 
+    /// Moves the selection with the arrow keys, clamped to the list (no wrap-around). Clears any notice.
     public func moveSelection(by delta: Int) {
         notice = nil
         guard !clips.isEmpty else { return }

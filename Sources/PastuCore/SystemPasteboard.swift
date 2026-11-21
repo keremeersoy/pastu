@@ -19,6 +19,7 @@ public final class SystemPasteboard: ClipboardSource {
         return false
     }
 
+    /// Replaces the clipboard with plain text (pasting from the panel is always plain text).
     public func write(text: String) {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
