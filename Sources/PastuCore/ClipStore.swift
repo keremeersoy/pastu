@@ -9,6 +9,7 @@ public struct StoredClip: Equatable, Sendable {
     public let firstCopiedAt: Date
     public let lastCopiedAt: Date
     public let copyCount: Int
+    public let isPinned: Bool
 }
 
 /// How much history to keep. `nil` means "no limit" for that dimension.
@@ -76,8 +77,8 @@ public final class ClipStore {
 
     public func recent(limit: Int = 50) throws -> [StoredClip] {
         try query("""
-            SELECT id, text, source_bundle_id, first_copied_at, last_copied_at, copy_count
-            FROM clips ORDER BY last_copied_at DESC, id DESC LIMIT ?1
+            SELECT id, text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned
+            FROM clips ORDER BY pinned DESC, last_copied_at DESC, id DESC LIMIT ?1
             """, limit: limit)
     }
 
@@ -88,10 +89,10 @@ public final class ClipStore {
 
         guard let match = Self.ftsMatchExpression(for: trimmed) else { return [] }
         return try self.query("""
-            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count
+            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned
             FROM clips_fts f JOIN clips c ON c.id = f.rowid
             WHERE clips_fts MATCH ?2
-            ORDER BY c.last_copied_at DESC, c.id DESC LIMIT ?1
+            ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
             """, limit: limit, match: match)
     }
 
@@ -106,14 +107,15 @@ public final class ClipStore {
     }
 
     /// Deletes clips outside the policy: first the ones older than `maxAge`, then everything beyond
-    /// the newest `maxCount`. Returns how many were deleted.
+    /// the newest `maxCount`. Pinned clips are never deleted and do not count against `maxCount`.
+    /// Returns how many were deleted.
     @discardableResult
     public func prune(_ policy: RetentionPolicy, now: Date = Date()) throws -> Int {
         try exec("BEGIN")
         do {
             var removed = 0
             if let maxAge = policy.maxAge {
-                let stmt = try prepare("DELETE FROM clips WHERE last_copied_at < ?1")
+                let stmt = try prepare("DELETE FROM clips WHERE last_copied_at < ?1 AND pinned = 0")
                 defer { sqlite3_finalize(stmt) }
                 sqlite3_bind_double(stmt, 1, now.addingTimeInterval(-maxAge).timeIntervalSince1970)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
@@ -122,7 +124,7 @@ public final class ClipStore {
             if let maxCount = policy.maxCount {
                 let stmt = try prepare("""
                     DELETE FROM clips WHERE id IN (
-                        SELECT id FROM clips ORDER BY last_copied_at DESC, id DESC LIMIT -1 OFFSET ?1
+                        SELECT id FROM clips WHERE pinned = 0 ORDER BY last_copied_at DESC, id DESC LIMIT -1 OFFSET ?1
                     )
                     """)
                 defer { sqlite3_finalize(stmt) }
@@ -136,6 +138,15 @@ public final class ClipStore {
             try? exec("ROLLBACK")
             throw error
         }
+    }
+
+    /// Pinned clips stay on top of the list and are never pruned. Pinning is not a copy: it changes nothing else.
+    public func setPinned(id: Int64, _ pinned: Bool) throws {
+        let stmt = try prepare("UPDATE clips SET pinned = ?2 WHERE id = ?1")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, id)
+        sqlite3_bind_int64(stmt, 2, pinned ? 1 : 0)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
     }
 
     public func delete(id: Int64) throws {
@@ -195,7 +206,8 @@ public final class ClipStore {
                 source_bundle_id TEXT,
                 first_copied_at REAL NOT NULL,
                 last_copied_at REAL NOT NULL,
-                copy_count INTEGER NOT NULL DEFAULT 1
+                copy_count INTEGER NOT NULL DEFAULT 1,
+                pinned INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS clips_last_copied ON clips (last_copied_at DESC);
             CREATE VIRTUAL TABLE IF NOT EXISTS clips_fts USING fts5(
@@ -209,6 +221,30 @@ public final class ClipStore {
                 INSERT INTO clips_fts (clips_fts, rowid, text) VALUES ('delete', old.id, old.text);
             END;
             """)
+
+        // Versioned upgrades for databases created by older builds. Each step must be safe to re-run.
+        if try userVersion() < 1 {
+            // v1: pins. Databases from before pins have no `pinned` column.
+            if !(try columnExists("pinned", in: "clips")) {
+                try exec("ALTER TABLE clips ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+            }
+            try exec("PRAGMA user_version = 1")
+        }
+    }
+
+    private func userVersion() throws -> Int {
+        let stmt = try prepare("PRAGMA user_version")
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
+        return Int(sqlite3_column_int64(stmt, 0))
+    }
+
+    private func columnExists(_ column: String, in table: String) throws -> Bool {
+        let stmt = try prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
+        defer { sqlite3_finalize(stmt) }
+        bind(table, at: 1, in: stmt)
+        bind(column, at: 2, in: stmt)
+        return sqlite3_step(stmt) == SQLITE_ROW
     }
 
     // MARK: SQLite helpers
@@ -230,7 +266,8 @@ public final class ClipStore {
                 sourceBundleIdentifier: sqlite3_column_text(stmt, 2).map { String(cString: $0) },
                 firstCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3)),
                 lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
-                copyCount: Int(sqlite3_column_int64(stmt, 5))
+                copyCount: Int(sqlite3_column_int64(stmt, 5)),
+                isPinned: sqlite3_column_int64(stmt, 6) != 0
             ))
         }
         return clips

@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 @testable import PastuCore
 
@@ -245,5 +246,122 @@ import Testing
             #expect(try permissions(of: path + suffix) == 0o600)
         }
         _ = store
+    }
+
+    // MARK: Pins
+
+    @Test func pinnedClipsComeFirstInRecent() throws {
+        let store = try ClipStore()
+        let old = try store.insert(clip("old", at: 1))
+        try store.insert(clip("new", at: 2))
+        try store.setPinned(id: old, true)
+        #expect(try store.recent().map(\.text) == ["old", "new"])
+        #expect(try store.recent().map(\.isPinned) == [true, false])
+    }
+
+    @Test func pinnedClipsComeFirstInSearch() throws {
+        let store = try ClipStore()
+        let old = try store.insert(clip("note one", at: 1))
+        try store.insert(clip("note two", at: 2))
+        try store.setPinned(id: old, true)
+        #expect(try store.search("note").map(\.text) == ["note one", "note two"])
+    }
+
+    @Test func unpinRestoresRecencyOrder() throws {
+        let store = try ClipStore()
+        let old = try store.insert(clip("old", at: 1))
+        try store.insert(clip("new", at: 2))
+        try store.setPinned(id: old, true)
+        try store.setPinned(id: old, false)
+        #expect(try store.recent().map(\.text) == ["new", "old"])
+        #expect(try store.recent().allSatisfy { !$0.isPinned })
+    }
+
+    @Test func pinningDoesNotCountAsACopy() throws {
+        let store = try ClipStore()
+        let id = try store.insert(clip("a", at: 5))
+        try store.setPinned(id: id, true)
+        let pinned = try #require(try store.recent().first)
+        #expect(pinned.copyCount == 1)
+        #expect(pinned.lastCopiedAt == Date(timeIntervalSince1970: 5))
+    }
+
+    @Test func copyingAPinnedClipAgainKeepsItPinned() throws {
+        let store = try ClipStore()
+        let id = try store.insert(clip("keep", at: 1))
+        try store.setPinned(id: id, true)
+        try store.insert(clip("keep", at: 2))
+        let clips = try store.recent()
+        #expect(clips.count == 1)
+        #expect(clips.first?.isPinned == true)
+    }
+
+    @Test func pruneNeverRemovesPinnedClips() throws {
+        let store = try ClipStore()
+        let now = Date(timeIntervalSince1970: 100 * day)
+        let ancient = try store.insert(clip("pinned ancient", at: 100 * day - 90 * day))
+        try store.setPinned(id: ancient, true)
+        try store.insert(clip("old unpinned", at: 100 * day - 80 * day))
+        for i in 1...3 { try store.insert(clip("fresh \(i)", at: 100 * day - Double(i) * 3600)) }
+
+        // Age rule removes the 80-day-old unpinned clip but must spare the pinned 90-day-old one.
+        try store.prune(RetentionPolicy(maxCount: nil, maxAge: 30 * day), now: now)
+        #expect(try store.recent().map(\.text).contains("pinned ancient"))
+        #expect(try store.recent().map(\.text).contains("old unpinned") == false)
+
+        // Count rule keeps 2 unpinned clips; pinned ones do not count against the limit.
+        try store.prune(RetentionPolicy(maxCount: 2, maxAge: nil), now: now)
+        let texts = try store.recent().map(\.text)
+        #expect(texts.count == 3)
+        #expect(texts.first == "pinned ancient")
+    }
+
+    @Test func pinningAMissingClipIsHarmless() throws {
+        let store = try ClipStore()
+        try store.setPinned(id: 12345, true)
+        #expect(try store.recent().isEmpty)
+    }
+
+    @Test func databaseCreatedBeforePinsStillOpensWithItsData() throws {
+        let path = NSTemporaryDirectory() + "pastu-old-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+
+        // The exact schema shipped before pins existed, with one indexed clip in it.
+        var db: OpaquePointer?
+        #expect(sqlite3_open(path, &db) == SQLITE_OK)
+        let legacy = """
+            CREATE TABLE clips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL UNIQUE, source_bundle_id TEXT,
+                first_copied_at REAL NOT NULL, last_copied_at REAL NOT NULL, copy_count INTEGER NOT NULL DEFAULT 1);
+            CREATE INDEX clips_last_copied ON clips (last_copied_at DESC);
+            CREATE VIRTUAL TABLE clips_fts USING fts5(text, content='clips', content_rowid='id', tokenize='unicode61 remove_diacritics 2');
+            CREATE TRIGGER clips_ai AFTER INSERT ON clips BEGIN INSERT INTO clips_fts (rowid, text) VALUES (new.id, new.text); END;
+            CREATE TRIGGER clips_ad AFTER DELETE ON clips BEGIN INSERT INTO clips_fts (clips_fts, rowid, text) VALUES ('delete', old.id, old.text); END;
+            INSERT INTO clips (text, first_copied_at, last_copied_at) VALUES ('from the past', 1, 1);
+            """
+        #expect(sqlite3_exec(db, legacy, nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(db)
+
+        let store = try ClipStore(path: path)
+        let clips = try store.search("past")
+        let migrated = try #require(clips.first)
+        #expect(migrated.text == "from the past")
+        #expect(migrated.isPinned == false)
+
+        try store.setPinned(id: migrated.id, true)
+        #expect(try store.recent().first?.isPinned == true)
+        try store.verifyIntegrity()
+    }
+
+    @Test func reopeningAMigratedDatabaseIsSafe() throws {
+        let path = NSTemporaryDirectory() + "pastu-reopen-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+        let first = try ClipStore(path: path)
+        let id = try first.insert(clip("persist", at: 1))
+        try first.setPinned(id: id, true)
+
+        let second = try ClipStore(path: path)
+        #expect(try second.recent().first?.isPinned == true)
+        _ = first
     }
 }

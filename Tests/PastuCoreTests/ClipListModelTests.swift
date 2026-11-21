@@ -90,4 +90,31 @@ import Testing
         #expect(model.select(row: -1) == false)
         #expect(model.selectedIndex == 1)
     }
+
+    @Test func togglePinPinsTheSelectedClipAndSelectionFollowsIt() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b", "c"]))   // list: c, b, a
+        model.moveSelection(by: 2)                                          // on "a"
+        model.togglePinSelected()
+        #expect(model.clips.map(\.text) == ["a", "c", "b"])
+        #expect(model.selectedClip?.text == "a")
+        #expect(model.selectedIndex == 0)
+        #expect(model.selectedClip?.isPinned == true)
+    }
+
+    @Test func togglingAgainUnpinsAndSelectionFollowsBack() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b", "c"]))
+        model.moveSelection(by: 2)
+        model.togglePinSelected()
+        model.togglePinSelected()
+        #expect(model.clips.map(\.text) == ["c", "b", "a"])
+        #expect(model.selectedClip?.text == "a")
+        #expect(model.selectedClip?.isPinned == false)
+    }
+
+    @Test func togglePinWithNoSelectionDoesNothing() throws {
+        let model = ClipListModel(store: try makeStore(["a"]))
+        model.query = "zzz"
+        model.togglePinSelected()
+        #expect(model.clips.isEmpty)
+    }
 }

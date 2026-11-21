@@ -21,7 +21,11 @@ extension ShellTests {
         for (text, app, secondsAgo) in samples {
             try store.insert(CapturedClip(text: text, sourceBundleIdentifier: app, date: now.addingTimeInterval(-secondsAgo)))
         }
-        return ClipListModel(store: store)
+        let model = ClipListModel(store: store)
+        model.moveSelection(by: 3) // the Notes clip
+        model.togglePinSelected()
+        model.moveSelection(by: -3)
+        return model
     }
 
     /// Hosts the view in a real window and captures the window's own drawing, so AppKit-backed

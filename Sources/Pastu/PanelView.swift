@@ -31,6 +31,12 @@ struct PanelView: View {
                     onSubmit()
                     return .handled
                 }
+                .onKeyPress(characters: CharacterSet(charactersIn: "pP"), phases: .down) { press in
+                    // ⌘P pins or unpins the selected clip.
+                    guard press.modifiers.contains(.command) else { return .ignored }
+                    model.togglePinSelected()
+                    return .handled
+                }
 
             Divider()
 
@@ -89,6 +95,11 @@ private struct ClipRow: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if clip.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.accentColor)
+            }
             if let shortcutDigit {
                 Text("⌘\(shortcutDigit)")
                     .font(.caption)
@@ -190,6 +201,7 @@ private struct HintFooter: View {
                     .foregroundStyle(.orange)
             }
             Text("⌘1–9 Quick paste")
+            Text("⌘P Pin")
             Text("↑↓ Select")
             Text("esc Close")
             Spacer()

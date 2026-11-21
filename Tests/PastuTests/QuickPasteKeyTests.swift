@@ -55,5 +55,27 @@ extension ShellTests {
         await pump(0.2)
         #expect(submitted == ["middle"])
     }
+    @Test func commandPPinsTheSelectedClip() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+
+        let store = try ClipStore()
+        for (i, text) in ["oldest", "middle", "newest"].enumerated() {
+            try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        let model = ClipListModel(store: store)
+        model.moveSelection(by: 2) // on "oldest"
+
+        let panel = ClipPanel(size: NSSize(width: 780, height: 460))
+        panel.contentView = NSHostingView(rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        panel.makeKeyAndOrderFront(nil)
+        await pump()
+        defer { panel.orderOut(nil) }
+
+        NSApp.sendEvent(keyEvent("p", keyCode: 35, modifiers: .command, window: panel))
+        await pump(0.2)
+        #expect(model.clips.first?.text == "oldest")
+        #expect(model.clips.first?.isPinned == true)
+    }
 }
 }

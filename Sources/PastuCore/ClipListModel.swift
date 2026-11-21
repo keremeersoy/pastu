@@ -42,6 +42,14 @@ public final class ClipListModel {
         return true
     }
 
+    /// Pins or unpins the selected clip. Pinned clips move to the top; the selection follows the clip.
+    public func togglePinSelected() {
+        guard let clip = selectedClip else { return }
+        try? store.setPinned(id: clip.id, !clip.isPinned)
+        reload()
+        if let index = clips.firstIndex(where: { $0.id == clip.id }) { selectedIndex = index }
+    }
+
     public func moveSelection(by delta: Int) {
         guard !clips.isEmpty else { return }
         selectedIndex = min(max(selectedIndex + delta, 0), clips.count - 1)
