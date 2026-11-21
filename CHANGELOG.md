@@ -6,9 +6,16 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-21
+## [0.1.1] - 2026-11-21
 
 First public prerelease (early prototype). Not notarized; see the release notes for first-launch steps.
+
+### Fixed
+- A timing-sensitive test could fail on busy CI machines, which stopped the 0.1.0 release build.
+
+## [0.1.0] - 2026-11-21
+
+Tagged but never released: the release build stopped on the flaky test fixed in 0.1.1. Everything below ships in 0.1.1.
 
 ### Added
 - Menu bar app that records copied text and keeps it in a local SQLite database.

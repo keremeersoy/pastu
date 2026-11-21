@@ -27,7 +27,7 @@ back into the app you were using.
 brew install --cask keremeersoy/pastu/pastu
 ```
 
-**Or download** [Pastu-0.1.0.zip](https://github.com/keremeersoy/pastu/releases/download/v0.1.0/Pastu-0.1.0.zip),
+**Or download** [Pastu-0.1.1.zip](https://github.com/keremeersoy/pastu/releases/download/v0.1.1/Pastu-0.1.1.zip),
 unzip it and move `Pastu.app` to Applications.
 
 Requires macOS 15 or later on Apple Silicon.
