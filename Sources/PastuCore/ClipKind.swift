@@ -4,6 +4,8 @@ import Foundation
 public enum ClipKind: Sendable, Equatable {
     case text
     case link
+    /// Stored as a PNG; never produced by `detect`, which only looks at text.
+    case image
 
     /// Longer than this is never treated as a link: it is more likely a data blob than something to open.
     static let maxLinkLength = 2048
@@ -29,11 +31,12 @@ public enum ClipKind: Sendable, Equatable {
     }
 }
 
-/// The panel's type filter. Cycled with Tab: all, text, links.
+/// The panel's type filter. Cycled with Tab: all, text, links, images.
 public enum ClipFilter: Sendable, Equatable, CaseIterable {
     case all
     case text
     case links
+    case images
 
     /// `nil` means "no restriction".
     public var kind: ClipKind? {
@@ -41,6 +44,7 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         case .all: nil
         case .text: .text
         case .links: .link
+        case .images: .image
         }
     }
 
@@ -48,7 +52,8 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         switch self {
         case .all: .text
         case .text: .links
-        case .links: .all
+        case .links: .images
+        case .images: .all
         }
     }
 
@@ -57,6 +62,7 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         case .all: "All"
         case .text: "Text"
         case .links: "Links"
+        case .images: "Images"
         }
     }
 }

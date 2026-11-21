@@ -76,6 +76,7 @@ struct PanelView: View {
         case .all: return "Nothing copied yet"
         case .text: return "No text clips"
         case .links: return "No links"
+        case .images: return "No images"
         }
     }
 

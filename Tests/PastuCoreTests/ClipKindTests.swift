@@ -56,11 +56,13 @@ import Testing
         #expect(ClipFilter.all.kind == nil)
         #expect(ClipFilter.text.kind == .text)
         #expect(ClipFilter.links.kind == .link)
+        #expect(ClipFilter.images.kind == .image)
     }
 
     @Test func filterCyclesThroughAllTextLinksAndWraps() {
         #expect(ClipFilter.all.next == .text)
         #expect(ClipFilter.text.next == .links)
-        #expect(ClipFilter.links.next == .all)
+        #expect(ClipFilter.links.next == .images)
+        #expect(ClipFilter.images.next == .all)
     }
 }

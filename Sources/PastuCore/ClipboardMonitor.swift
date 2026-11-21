@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Abstraction over the system pasteboard so the monitor is testable.
@@ -12,9 +13,21 @@ public protocol ClipboardSource: AnyObject {
 
 /// A copy that passed the privacy filter.
 public struct CapturedClip: Equatable, Sendable {
+    /// For text clips the copied text. For image clips a stable key made from the image's content
+    /// (`[image] <hash>`), so the same picture copied twice merges and search can find images.
     public let text: String
     public let sourceBundleIdentifier: String?
     public let date: Date
+    /// PNG data when the clip is an image, otherwise nil.
+    public var imagePNG: Data? = nil
+
+    /// An image clip, keyed by a hash of its bytes so the same picture copied twice merges into one row.
+    static func image(png: Data, sourceBundleIdentifier: String? = nil, date: Date = Date()) -> CapturedClip {
+        let digest = SHA256.hash(data: png).prefix(8).map { String(format: "%02x", $0) }.joined()
+        return CapturedClip(
+            text: "[image] \(digest)", sourceBundleIdentifier: sourceBundleIdentifier, date: date, imagePNG: png
+        )
+    }
 }
 
 /// Polls the pasteboard's changeCount (macOS has no change notification)

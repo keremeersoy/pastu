@@ -144,13 +144,15 @@ import Testing
         #expect(model.selectedIndex == 0)
     }
 
-    @Test func cycleFilterGoesAllTextLinksAll() throws {
+    @Test func cycleFilterGoesAllTextLinksImagesAll() throws {
         let model = ClipListModel(store: try makeStore(["a"]))
         #expect(model.filter == .all)
         model.cycleFilter()
         #expect(model.filter == .text)
         model.cycleFilter()
         #expect(model.filter == .links)
+        model.cycleFilter()
+        #expect(model.filter == .images)
         model.cycleFilter()
         #expect(model.filter == .all)
     }

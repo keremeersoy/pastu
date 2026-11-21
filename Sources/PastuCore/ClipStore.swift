@@ -10,8 +10,8 @@ public struct StoredClip: Equatable, Sendable {
     public let lastCopiedAt: Date
     public let copyCount: Int
     public let isPinned: Bool
-
-    public var kind: ClipKind { ClipKind.detect(text) }
+    /// `.image` for pictures; for text clips computed from the text (text or link).
+    public let kind: ClipKind
 }
 
 /// How much history to keep. `nil` means "no limit" for that dimension.
@@ -66,8 +66,8 @@ public final class ClipStore {
     @discardableResult
     public func insert(_ clip: CapturedClip) throws -> Int64 {
         let stmt = try prepare("""
-            INSERT INTO clips (text, source_bundle_id, first_copied_at, last_copied_at)
-            VALUES (?1, ?2, ?3, ?3)
+            INSERT INTO clips (text, source_bundle_id, first_copied_at, last_copied_at, kind, image)
+            VALUES (?1, ?2, ?3, ?3, ?4, ?5)
             ON CONFLICT(text) DO UPDATE SET
                 last_copied_at = excluded.last_copied_at,
                 copy_count = copy_count + 1,
@@ -78,6 +78,8 @@ public final class ClipStore {
         bind(clip.text, at: 1, in: stmt)
         bind(clip.sourceBundleIdentifier, at: 2, in: stmt)
         sqlite3_bind_double(stmt, 3, clip.date.timeIntervalSince1970)
+        bind(clip.imagePNG == nil ? "text" : "image", at: 4, in: stmt)
+        bind(blob: clip.imagePNG, at: 5, in: stmt)
         guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
         let id = sqlite3_column_int64(stmt, 0)
         // Drain so the statement completes before finalize.
@@ -86,22 +88,33 @@ public final class ClipStore {
     }
 
     /// Pinned first, then newest. `kind` restricts the result to text or links; it applies before `limit`.
+    /// The PNG bytes of an image clip, or nil for text clips and unknown ids.
+    /// Kept out of the list queries on purpose: pictures can be megabytes and the list only needs metadata.
+    public func imageData(id: Int64) throws -> Data? {
+        let stmt = try prepare("SELECT image FROM clips WHERE id = ?1")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, id)
+        guard sqlite3_step(stmt) == SQLITE_ROW, let bytes = sqlite3_column_blob(stmt, 0) else { return nil }
+        return Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, 0)))
+    }
+
     public func recent(limit: Int = 50, kind: ClipKind? = nil) throws -> [StoredClip] {
         try query("""
-            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned
+            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind
             FROM clips c
             WHERE \(Self.kindCondition(kind))
             ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
             """, limit: limit)
     }
 
-    /// SQL for the kind filter. Uses `pastu_is_link`, which calls `ClipKind.detect`, so the filter
-    /// and the Swift-side `StoredClip.kind` can never disagree.
+    /// SQL for the kind filter. Text and links use `pastu_is_link`, which calls `ClipKind.detect`, so the
+    /// filter and the Swift-side `StoredClip.kind` can never disagree; images are marked by the `kind` column.
     private static func kindCondition(_ kind: ClipKind?) -> String {
         switch kind {
         case nil: "1"
-        case .link?: "pastu_is_link(c.text) = 1"
-        case .text?: "pastu_is_link(c.text) = 0"
+        case .link?: "c.kind = 'text' AND pastu_is_link(c.text) = 1"
+        case .text?: "c.kind = 'text' AND pastu_is_link(c.text) = 0"
+        case .image?: "c.kind = 'image'"
         }
     }
 
@@ -133,7 +146,7 @@ public final class ClipStore {
         }
 
         return try self.query("""
-            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned
+            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind
             FROM \(source)
             WHERE \(conditions.joined(separator: " AND "))
             ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
@@ -193,12 +206,15 @@ public final class ClipStore {
     /// immediately after deletes, without waiting for a VACUUM.
     static let indexOverheadFactor = 4.5
 
-    /// Estimated on-disk size of the history: UTF-8 bytes of all clip text times `indexOverheadFactor`.
+    /// Estimated on-disk size of the history: UTF-8 bytes of all clip text times `indexOverheadFactor`
+    /// (the trigram index), plus the bytes of every image (stored once, not indexed).
     public func estimatedSizeInBytes() throws -> Int {
-        let stmt = try prepare("SELECT COALESCE(SUM(LENGTH(CAST(text AS BLOB))), 0) FROM clips")
+        let stmt = try prepare("""
+            SELECT COALESCE(SUM(LENGTH(CAST(text AS BLOB))), 0), COALESCE(SUM(LENGTH(image)), 0) FROM clips
+            """)
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
-        return Int(Double(sqlite3_column_int64(stmt, 0)) * Self.indexOverheadFactor)
+        return Int(Double(sqlite3_column_int64(stmt, 0)) * Self.indexOverheadFactor) + Int(sqlite3_column_int64(stmt, 1))
     }
 
     /// Deletes the oldest unpinned clips until the estimate is within `cap`. Runs inside `prune`'s transaction.
@@ -206,13 +222,15 @@ public final class ClipStore {
         var excess = try estimatedSizeInBytes() - cap
         guard excess > 0 else { return 0 }
         let select = try prepare("""
-            SELECT id, LENGTH(CAST(text AS BLOB)) FROM clips WHERE pinned = 0 ORDER BY last_copied_at ASC, id ASC
+            SELECT id, LENGTH(CAST(text AS BLOB)), COALESCE(LENGTH(image), 0)
+            FROM clips WHERE pinned = 0 ORDER BY last_copied_at ASC, id ASC
             """)
         defer { sqlite3_finalize(select) }
         var ids: [Int64] = []
         while excess > 0, sqlite3_step(select) == SQLITE_ROW {
             ids.append(sqlite3_column_int64(select, 0))
             excess -= Int((Double(sqlite3_column_int64(select, 1)) * Self.indexOverheadFactor).rounded(.up))
+                + Int(sqlite3_column_int64(select, 2))
         }
         let delete = try prepare("DELETE FROM clips WHERE id = ?1")
         defer { sqlite3_finalize(delete) }
@@ -316,7 +334,9 @@ public final class ClipStore {
                 first_copied_at REAL NOT NULL,
                 last_copied_at REAL NOT NULL,
                 copy_count INTEGER NOT NULL DEFAULT 1,
-                pinned INTEGER NOT NULL DEFAULT 0
+                pinned INTEGER NOT NULL DEFAULT 0,
+                kind TEXT NOT NULL DEFAULT 'text',
+                image BLOB
             );
             CREATE INDEX IF NOT EXISTS clips_last_copied ON clips (last_copied_at DESC);
             CREATE VIRTUAL TABLE IF NOT EXISTS clips_fts USING fts5(
@@ -356,6 +376,16 @@ public final class ClipStore {
             }
             try exec("PRAGMA user_version = 2")
         }
+        if try userVersion() < 3 {
+            // v3: images. Existing rows are text; the PNG bytes live in the same row but are never selected by the list queries.
+            if !(try columnExists("kind", in: "clips")) {
+                try exec("ALTER TABLE clips ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
+            }
+            if !(try columnExists("image", in: "clips")) {
+                try exec("ALTER TABLE clips ADD COLUMN image BLOB")
+            }
+            try exec("PRAGMA user_version = 3")
+        }
     }
 
     private func ftsUsesWordTokenizer() throws -> Bool {
@@ -394,14 +424,17 @@ public final class ClipStore {
             let rc = sqlite3_step(stmt)
             if rc == SQLITE_DONE { break }
             guard rc == SQLITE_ROW else { throw lastError() }
+            let text = Self.columnString(stmt, 1) ?? ""
+            let kind: ClipKind = Self.columnString(stmt, 7) == "image" ? .image : ClipKind.detect(text)
             clips.append(StoredClip(
                 id: sqlite3_column_int64(stmt, 0),
-                text: Self.columnString(stmt, 1) ?? "",
+                text: text,
                 sourceBundleIdentifier: Self.columnString(stmt, 2),
                 firstCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3)),
                 lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
                 copyCount: Int(sqlite3_column_int64(stmt, 5)),
-                isPinned: sqlite3_column_int64(stmt, 6) != 0
+                isPinned: sqlite3_column_int64(stmt, 6) != 0,
+                kind: kind
             ))
         }
         return clips
@@ -430,6 +463,13 @@ public final class ClipStore {
             sqlite3_bind_text(stmt, index, value, Int32(value.utf8.count), Self.transient)
         } else {
             sqlite3_bind_null(stmt, index)
+        }
+    }
+
+    private func bind(blob: Data?, at index: Int32, in stmt: OpaquePointer) {
+        guard let blob else { sqlite3_bind_null(stmt, index); return }
+        blob.withUnsafeBytes { raw in
+            _ = sqlite3_bind_blob(stmt, index, raw.baseAddress, Int32(blob.count), Self.transient)
         }
     }
 

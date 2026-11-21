@@ -103,8 +103,12 @@ extension ShellTests {
         #expect(model.clips.map(\.text) == ["https://swift.org"])
         NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
         await pump(0.2)
+        #expect(model.filter == .images)
+        NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
+        await pump(0.2)
         #expect(model.filter == .all)
     }
+
     /// Goes through PanelController (the real wiring: controller -> panel callback -> model) and calls the
     /// panel's performKeyEquivalent directly. NSApp.sendEvent would route ⌘ shortcuts to the KEY window, and
     /// whether a window can become key depends on the desktop (a locked screen or an inactive session
