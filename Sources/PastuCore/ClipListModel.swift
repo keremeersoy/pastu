@@ -57,14 +57,24 @@ public final class ClipListModel {
         let id = selectedClip?.id
         let lastLoadedID = clips.last?.id
         let loaded = max(clips.count, pageSize)
-        // Ask for one row more than is loaded: when a new copy pushed the old last row down by one it shows
-        // up at the end, and we keep it so the list grows by that clip instead of silently dropping a row.
-        // In any other case the extra row is trimmed again.
-        reload(limit: loaded + 1)
-        if clips.count > loaded, clips.last?.id != lastLoadedID {
-            clips.removeLast(clips.count - loaded)
+        // Fetch a whole extra page so any number of new copies since the last refresh still leaves the
+        // previously loaded rows (and the selected clip) inside the result.
+        let limit = loaded + pageSize
+        let fetched = (try? store.search(query, limit: limit, offset: 0, kind: filter.kind)) ?? []
+        // Keep at least what was loaded, extended to include the selected clip and the old last row, so a
+        // refresh never drops either. Growth is bounded by the number of new clips.
+        var keep = min(loaded, fetched.count)
+        for target in [id, lastLoadedID] {
+            if let target, let index = fetched.firstIndex(where: { $0.id == target }) { keep = max(keep, index + 1) }
         }
-        if let id, let index = clips.firstIndex(where: { $0.id == id }) { selectedIndex = index }
+        clips = Array(fetched.prefix(keep))
+        // More may exist when the fetch was full or we trimmed rows we did fetch.
+        hasMore = fetched.count == limit || fetched.count > keep
+        if let id, let index = clips.firstIndex(where: { $0.id == id }) {
+            selectedIndex = index
+        } else {
+            selectedIndex = clips.isEmpty ? 0 : min(selectedIndex, clips.count - 1)
+        }
     }
 
     /// Appends the next page for the current query and filter. The selection does not move.

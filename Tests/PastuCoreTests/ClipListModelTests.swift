@@ -311,6 +311,22 @@ import Testing
         #expect(model.selectedClip?.id == id)
     }
 
+    @Test func refreshKeepsTheSelectedClipWhenSeveralClipsArrived() throws {
+        let store = try makeBigStore(250)
+        let model = ClipListModel(store: store)
+        model.loadMore()
+        model.loadMore()         // everything is loaded now
+        model.select(row: 249)   // last loaded row
+        let id = model.selectedClip?.id
+        for i in 0..<3 {
+            try store.insert(CapturedClip(text: "fresh \(i)", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 9000 + Double(i))))
+        }
+        model.refresh()
+        #expect(model.selectedClip?.id == id)
+        #expect(model.clips.count == 253)
+        #expect(model.hasMore == false)
+    }
+
     @Test func deleteKeepsLoadedPages() throws {
         let model = ClipListModel(store: try makeBigStore(250))
         model.loadMore()
