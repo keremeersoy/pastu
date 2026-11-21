@@ -44,13 +44,16 @@ import Testing
 
     // MARK: relativeTime
 
-    @Test(arguments: [
+    // An explicitly typed constant: as an inline literal, Swift 6.3 (Xcode 26 on CI) gives up type-checking it.
+    static let relativeTimeCases: [(Double, String)] = [
         (0.0, "just now"), (59.0, "just now"),
         (60.0, "1m ago"), (3_599.0, "59m ago"),
         (3_600.0, "1h ago"), (86_399.0, "23h ago"),
         (86_400.0, "1d ago"), (29.0 * 86_400, "29d ago"),
         (30.0 * 86_400, "1mo ago"), (95.0 * 86_400, "3mo ago"),
-    ])
+    ]
+
+    @Test(arguments: relativeTimeCases)
     func relativeTimeBuckets(secondsAgo: Double, expected: String) {
         let now = Date(timeIntervalSince1970: 1_000_000_000)
         #expect(ClipFormatting.relativeTime(from: now.addingTimeInterval(-secondsAgo), to: now) == expected)
