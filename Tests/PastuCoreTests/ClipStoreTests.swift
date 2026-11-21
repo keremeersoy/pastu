@@ -21,6 +21,33 @@ import Testing
         #expect(try store.recent(limit: 2).count == 2)
     }
 
+    @Test func pagesOfRecentDoNotOverlapAndCoverAll() throws {
+        let store = try ClipStore()
+        for i in 0..<250 { try store.insert(clip("clip \(i)", at: Double(i))) }
+        let pages = try [0, 100, 200].map { try store.recent(limit: 100, offset: $0) }
+        #expect(pages.map(\.count) == [100, 100, 50])
+        let ids = pages.flatMap { $0.map(\.id) }
+        #expect(ids.count == 250)
+        #expect(Set(ids).count == 250)
+        #expect(try Set(store.recent(limit: 1000).map(\.id)) == Set(ids))
+    }
+
+    @Test func searchPagesKeepOrder() throws {
+        let store = try ClipStore()
+        for i in 0..<120 { try store.insert(clip("item \(i)", at: Double(i))) }
+        let all = try store.search("item", limit: 200).map(\.id)
+        let tail = try store.search("item", limit: 100, offset: 100).map(\.id)
+        #expect(all.count == 120)
+        #expect(tail.count == 20)
+        #expect(tail == Array(all.suffix(20)))
+    }
+
+    @Test func negativeOffsetIsTreatedAsZero() throws {
+        let store = try ClipStore()
+        for i in 0..<3 { try store.insert(clip("clip \(i)", at: Double(i))) }
+        #expect(try store.recent(offset: -5).count == 3)
+    }
+
     @Test func storesSourceApp() throws {
         let store = try ClipStore()
         try store.insert(clip("hello", at: 1, app: "com.apple.Safari"))

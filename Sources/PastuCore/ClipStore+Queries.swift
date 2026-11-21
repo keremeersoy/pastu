@@ -14,13 +14,14 @@ extension ClipStore {
     }
 
     /// Pinned first, then newest. `kind` restricts the result to text, links or images; it applies before `limit`.
-    public func recent(limit: Int = 50, kind: ClipKind? = nil) throws -> [StoredClip] {
+    /// `offset` skips that many rows so the panel can load the list in pages.
+    public func recent(limit: Int = 50, offset: Int = 0, kind: ClipKind? = nil) throws -> [StoredClip] {
         try query("""
             SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind
             FROM clips c
             WHERE \(Self.kindCondition(kind))
-            ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
-            """, limit: limit)
+            ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1 OFFSET ?2
+            """, limit: limit, offset: offset)
     }
 
     /// SQL for the kind filter. Text and links use `pastu_is_link`, which calls `ClipKind.detect`, so the
@@ -39,9 +40,9 @@ extension ClipStore {
     ///
     /// Terms of 3+ characters use the trigram index. Shorter terms cannot (a trigram needs 3 characters),
     /// so they are checked with `instr`, which is only case-insensitive for ASCII letters.
-    public func search(_ query: String, limit: Int = 50, kind: ClipKind? = nil) throws -> [StoredClip] {
+    public func search(_ query: String, limit: Int = 50, offset: Int = 0, kind: ClipKind? = nil) throws -> [StoredClip] {
         let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        if terms.isEmpty { return try recent(limit: limit, kind: kind) }
+        if terms.isEmpty { return try recent(limit: limit, offset: offset, kind: kind) }
 
         let indexed = terms.filter { $0.count >= 3 }
         let short = terms.filter { $0.count < 3 }
@@ -53,11 +54,11 @@ extension ClipStore {
             source = "clips c"
         } else {
             source = "clips_fts f JOIN clips c ON c.id = f.rowid"
-            conditions.append("clips_fts MATCH ?\(binds.count + 2)")
+            conditions.append("clips_fts MATCH ?\(binds.count + 3)")
             binds.append(Self.ftsMatchExpression(for: indexed))
         }
         for term in short {
-            conditions.append("instr(lower(c.text), lower(?\(binds.count + 2))) > 0")
+            conditions.append("instr(lower(c.text), lower(?\(binds.count + 3))) > 0")
             binds.append(term)
         }
 
@@ -65,8 +66,8 @@ extension ClipStore {
             SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind
             FROM \(source)
             WHERE \(conditions.joined(separator: " AND "))
-            ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
-            """, limit: limit, binds: binds)
+            ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1 OFFSET ?2
+            """, limit: limit, offset: offset, binds: binds)
     }
 
     /// Turns search terms into a safe FTS5 expression: each term becomes a quoted phrase, so characters
@@ -75,12 +76,13 @@ extension ClipStore {
         terms.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: " ")
     }
 
-    /// Runs a clip query. `?1` is the limit; `binds` fill `?2`, `?3`, … in order.
-    private func query(_ sql: String, limit: Int, binds: [String] = []) throws -> [StoredClip] {
+    /// Runs a clip query. `?1` is the limit, `?2` the offset (negative values count as 0); `binds` fill `?3`, `?4`, … in order.
+    private func query(_ sql: String, limit: Int, offset: Int, binds: [String] = []) throws -> [StoredClip] {
         let stmt = try prepare(sql)
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_int64(stmt, 1, Int64(limit))
-        for (offset, value) in binds.enumerated() { bind(value, at: Int32(offset + 2), in: stmt) }
+        sqlite3_bind_int64(stmt, 2, Int64(max(0, offset)))
+        for (index, value) in binds.enumerated() { bind(value, at: Int32(index + 3), in: stmt) }
 
         var clips: [StoredClip] = []
         while true {
