@@ -9,13 +9,16 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private let model: ClipListModel
     private let onSelect: (StoredClip) -> Void
+    private let canAutoPaste: () -> Bool
     private let panel = ClipPanel(size: PanelController.size)
 
     var isVisible: Bool { panel.isVisible }
 
     /// - Parameter onSelect: called after the panel closed, with the clip the user picked.
-    init(model: ClipListModel, onSelect: @escaping (StoredClip) -> Void) {
+    /// - Parameter canAutoPaste: whether Pastu may send ⌘V (Accessibility permission); shown in the footer.
+    init(model: ClipListModel, canAutoPaste: @escaping () -> Bool, onSelect: @escaping (StoredClip) -> Void) {
         self.model = model
+        self.canAutoPaste = canAutoPaste
         self.onSelect = onSelect
         super.init()
         panel.delegate = self
@@ -30,7 +33,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         model.query = ""
         model.refresh()
         // A fresh view each time resets focus and scroll position.
-        panel.contentView = NSHostingView(rootView: PanelView(model: model, onSubmit: { [weak self] in
+        panel.contentView = NSHostingView(rootView: PanelView(model: model, canAutoPaste: canAutoPaste(), onSubmit: { [weak self] in
             self?.submit()
         }))
         panel.setFrameOrigin(origin(on: screenUnderMouse()))

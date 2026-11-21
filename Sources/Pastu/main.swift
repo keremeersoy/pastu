@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let systemPasteboard = SystemPasteboard()
     private var accessWarningItem: NSMenuItem?
     private var storageWarningItem: NSMenuItem?
+    private var accessibilityWarningItem: NSMenuItem?
     /// Set when the history database could not be opened or written; shown in the menu.
     private var storageError: String?
     private let retention = RetentionPolicy()
@@ -22,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.store = store
             try store.prune(retention)
             let model = ClipListModel(store: store)
-            let panelController = PanelController(model: model) { [weak self] clip in
+            let panelController = PanelController(model: model, canAutoPaste: { PasteSender.isTrusted }) { [weak self] clip in
                 self?.paste(clip)
             }
             self.panelController = panelController
@@ -77,6 +78,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    @objc private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     @objc private func openPrivacySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
             NSWorkspace.shared.open(url)
@@ -89,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         accessWarningItem?.isHidden = !systemPasteboard.isAccessDenied
+        accessibilityWarningItem?.isHidden = PasteSender.isTrusted
         if let storageError {
             storageWarningItem?.title = "⚠︎ History problem: \(storageError)"
             storageWarningItem?.isHidden = false
@@ -114,6 +122,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(warning)
         accessWarningItem = warning
         menu.delegate = self
+
+        let accessibilityWarning = NSMenuItem(
+            title: "Pastu needs Accessibility permission to paste — open settings…",
+            action: #selector(openAccessibilitySettings), keyEquivalent: ""
+        )
+        accessibilityWarning.target = self
+        accessibilityWarning.isHidden = true
+        menu.addItem(accessibilityWarning)
+        accessibilityWarningItem = accessibilityWarning
 
         let storageWarning = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         storageWarning.isHidden = true

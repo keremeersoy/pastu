@@ -42,7 +42,7 @@ import Testing
         var submitted: [String?] = []
 
         let panel = ClipPanel(size: NSSize(width: 780, height: 460))
-        panel.contentView = NSHostingView(rootView: PanelView(model: model, onSubmit: {
+        panel.contentView = NSHostingView(rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {
             submitted.append(model.selectedClip?.text)
         }))
         panel.makeKeyAndOrderFront(nil)

@@ -8,6 +8,7 @@ enum PanelMetrics {
 
 struct PanelView: View {
     let model: ClipListModel
+    let canAutoPaste: Bool
     let onSubmit: () -> Void
 
     @FocusState private var searchFocused: Bool
@@ -46,7 +47,7 @@ struct PanelView: View {
             }
 
             Divider()
-            HintFooter()
+            HintFooter(canAutoPaste: canAutoPaste)
         }
         .frame(width: PanelMetrics.size.width, height: PanelMetrics.size.height)
         .panelShell()
@@ -177,9 +178,17 @@ private struct AppIconView: View {
 }
 
 private struct HintFooter: View {
+    let canAutoPaste: Bool
+
     var body: some View {
         HStack(spacing: 16) {
-            Text("↩ Paste")
+            if canAutoPaste {
+                Text("↩ Paste")
+            } else {
+                // Without the Accessibility permission Pastu can only copy; the user presses ⌘V themselves.
+                Label("↩ Copies only: enable Accessibility to auto-paste", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
             Text("⌘1–9 Quick paste")
             Text("↑↓ Select")
             Text("esc Close")
