@@ -1,5 +1,8 @@
 #!/bin/bash
-# Builds build/Pastu.app from the SwiftPM executable and ad-hoc signs it.
+# Builds build/Pastu.app from the SwiftPM executable and signs it (local dev identity if present, else ad-hoc).
+#
+# Optional: VERSION=0.1.0 ./scripts/build-app.sh sets CFBundleShortVersionString in the built bundle only;
+# Resources/Info.plist is never modified (the release workflow passes the tag's version this way).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -11,6 +14,17 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BIN" "$APP/Contents/MacOS/Pastu"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+mkdir -p "$APP/Contents/Resources"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
+if [ -n "${VERSION:-}" ]; then
+    if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+        echo "VERSION must look like 1.2.3 or 1.2.3-beta.1, got: $VERSION" >&2
+        exit 1
+    fi
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+    echo "Version set to $VERSION in the built bundle"
+fi
 
 # Prefer the local dev identity (scripts/setup-dev-signing.sh): it keeps the code identity stable across
 # rebuilds, so macOS does not forget the Accessibility permission. Fall back to an ad-hoc signature,
