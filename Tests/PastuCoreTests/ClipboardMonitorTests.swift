@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import PastuCore
 
@@ -139,5 +140,22 @@ private final class FakeSource: ClipboardSource {
         source.copy(plain("hello"))
         monitor.poll()
         #expect(source.textReads == 1)
+    }
+
+    /// While a menu is open the run loop is in event-tracking mode; a default-mode timer would stop firing
+    /// and copies made at that moment would be missed.
+    @Test func keepsPollingWhileTheRunLoopTracksEvents() {
+        let source = FakeSource()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0.text) }
+        monitor.start(interval: 0.01)
+        defer { monitor.stop() }
+
+        source.copy(plain("while menu open"))
+        // AppKit marks event-tracking as a common mode; without NSApplication in tests, do the same for a stand-in mode.
+        let trackingMode = CFRunLoopMode("pastu.test.tracking" as CFString)
+        CFRunLoopAddCommonMode(CFRunLoopGetMain(), trackingMode)
+        RunLoop.current.run(mode: RunLoop.Mode("pastu.test.tracking"), before: Date().addingTimeInterval(0.3))
+        #expect(received == ["while menu open"])
     }
 }
