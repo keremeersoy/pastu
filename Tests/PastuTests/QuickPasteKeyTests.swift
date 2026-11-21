@@ -6,8 +6,9 @@ import Testing
 
 /// Drives the real panel with real key events through NSApplication.sendEvent,
 /// the same path macOS uses for the user's keystrokes.
+extension ShellTests {
 @MainActor
-@Suite(.serialized) struct QuickPasteKeyTests {
+@Suite struct QuickPasteKeyTests {
     private struct Harness {
         let panel: ClipPanel
         let model: ClipListModel
@@ -54,4 +55,5 @@ import Testing
         await pump(0.2)
         #expect(submitted == ["middle"])
     }
+}
 }

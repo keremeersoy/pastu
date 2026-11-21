@@ -5,6 +5,7 @@ import Testing
 @testable import PastuCore
 
 /// Renders the panel offscreen. Set PASTU_SNAPSHOT_DIR to also write PNGs for visual review.
+extension ShellTests {
 @MainActor
 @Suite struct PanelSnapshotTests {
     private func sampleModel() throws -> ClipListModel {
@@ -68,4 +69,5 @@ import Testing
         let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
         save(image, name: "panel-empty")
     }
+}
 }
