@@ -32,9 +32,17 @@ Pasting into other apps needs the **Accessibility** permission
 (System Settings → Privacy & Security → Accessibility). Without it, the selected text is still
 placed on your clipboard and you can press ⌘V yourself.
 
-Because the app is ad-hoc signed (no Apple Developer account yet), macOS may treat every rebuild as a new
-app and ask for the permission again. If pasting stops working after a rebuild, remove Pastu from the
-Accessibility list and add it again.
+### Keeping the permission across rebuilds
+
+An ad-hoc signature changes with every build, so macOS forgets the Accessibility permission each time.
+Run this once to create a local, self-signed signing identity (in its own keychain; no Apple Developer
+account needed). `build-app.sh` then signs with it and the permission survives rebuilds:
+
+```bash
+./scripts/setup-dev-signing.sh
+```
+
+If it is not set up, `build-app.sh` falls back to an ad-hoc signature.
 
 ## Project layout
 

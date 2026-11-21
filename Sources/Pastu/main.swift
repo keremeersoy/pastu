@@ -54,6 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if hotKey == nil { NSLog("Pastu could not register its global hotkey") }
 
         setUpStatusItem()
+
+        // Ask for the Accessibility permission right away (once per launch) instead of failing silently
+        // at the first paste. The system dialog has a button that opens the right Settings pane.
+        if !PasteSender.isTrusted {
+            didPromptForAccessibility = true
+            PasteSender.requestTrust()
+        }
     }
 
     private var didPromptForAccessibility = false
