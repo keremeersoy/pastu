@@ -6,6 +6,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Validate before touching anything, so a bad value never leaves a half-built bundle behind.
+if [ -n "${VERSION:-}" ] && ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+    echo "VERSION must look like 1.2.3 or 1.2.3-beta.1, got: $VERSION" >&2
+    exit 1
+fi
+
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/Pastu"
 
@@ -18,10 +24,6 @@ mkdir -p "$APP/Contents/Resources"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 if [ -n "${VERSION:-}" ]; then
-    if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
-        echo "VERSION must look like 1.2.3 or 1.2.3-beta.1, got: $VERSION" >&2
-        exit 1
-    fi
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
     echo "Version set to $VERSION in the built bundle"
 fi
