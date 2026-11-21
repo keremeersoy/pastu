@@ -52,3 +52,7 @@ Tagged but never released: the release build stopped on the flaky test fixed in 
 - Copies made while a menu bar menu is open are no longer missed (pasteboard timer runs in common run loop modes).
 - Text containing NUL characters is stored whole instead of being truncated (which could merge different clips).
 - Deleted and pruned clips are overwritten in the database file (`secure_delete`).
+
+[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/keremeersoy/pastu/releases/tag/v0.1.1
+[0.1.0]: https://github.com/keremeersoy/pastu/tree/v0.1.0
