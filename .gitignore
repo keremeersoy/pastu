@@ -11,3 +11,6 @@ notes/
 
 # Claude Code local project data (settings, agent worktrees): never commit
 .claude/
+
+# Personal project notes for local assistants (not part of the public repo)
+CLAUDE.md
