@@ -17,7 +17,10 @@ will follow [Semantic Versioning](https://semver.org/) once it has a first relea
 - Privacy filter: concealed and transient pasteboard items are never read or stored; copies over 1 MB are skipped.
 - Retention policy: 5,000 unpinned clips, 90 days and about 200 MB in total (estimated); pinned clips are never pruned.
 - Pause/Resume recording and Clear history (keeps pinned) in the menu bar menu; the pause state survives a relaunch.
-- Link detection and a type filter (All / Text / Links) cycled with Tab.
+- Link detection and a type filter (All / Text / Links / Images) cycled with Tab.
+- Pictures: copied images and screenshots are recorded (PNG, up to 10 MB), shown as thumbnails with a full
+  preview and size, and pasted back with Return. Identical pictures merge; the privacy rules (concealed items,
+  ignored apps) apply to pictures too. Database schema v3 (existing databases are upgraded in place).
 - Ignored apps: ⌘I in the panel ignores the selected clip's source app (saved; managed from the menu bar menu).
 - Delete the selected clip from the panel with ⌘⌫ (plain Backspace keeps editing the search text).
 - Database folder `0700`, database files `0600`; old looser permissions are tightened on open.

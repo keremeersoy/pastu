@@ -22,3 +22,4 @@ bug bounty and no guaranteed fix time, but reports are taken seriously.
 - The history database is **not encrypted**. It is protected by file permissions only (`0700` folder,
   `0600` files). This is documented in the README and is not a vulnerability by itself.
 - Copies that apps do not mark as concealed or transient cannot be told apart from normal text.
+- Pictures (for example screenshots) are stored unencrypted as PNG, like text, and can contain sensitive content.
