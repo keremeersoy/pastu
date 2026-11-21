@@ -26,6 +26,26 @@ public enum ClipFormatting {
         return (shown, max(text.count - shown.count, 0))
     }
 
+    /// Like `previewText(_:limit:)`, but when the first search match lies beyond the first `limit` characters
+    /// the preview is a `limit`-sized window around it, so the highlighted match is actually visible.
+    /// Otherwise (match inside the start, or no match) it equals the start-of-text preview.
+    public static func previewText(
+        _ text: String, around query: String, limit: Int = 4_000
+    ) -> (text: String, hiddenBefore: Int, hiddenAfter: Int) {
+        let head = previewText(text, limit: limit)
+        let terms = SearchHighlighter.terms(of: query)
+        guard let match = SearchHighlighter.earliestMatch(of: terms, in: text),
+              let limitIndex = text.index(text.startIndex, offsetBy: limit, limitedBy: text.endIndex),
+              match.lowerBound >= limitIndex
+        else { return (head.text, 0, head.hiddenCharacters) }
+
+        let start = text.index(match.lowerBound, offsetBy: -(limit / 3), limitedBy: text.startIndex) ?? text.startIndex
+        let end = text.index(start, offsetBy: limit, limitedBy: text.endIndex) ?? text.endIndex
+        return (String(text[start..<end]),
+                text.distance(from: text.startIndex, to: start),
+                text.distance(from: end, to: text.endIndex))
+    }
+
     /// Short, locale-independent relative time ("just now", "5m ago", "2h ago", "3d ago", "2mo ago").
     public static func relativeTime(from date: Date, to now: Date) -> String {
         let seconds = Int(now.timeIntervalSince(date))

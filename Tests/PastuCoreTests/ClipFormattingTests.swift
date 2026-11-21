@@ -105,4 +105,30 @@ import Testing
     @Test func justBelowAMegabyteStaysInKilobytes() {
         #expect(ClipFormatting.fileSize(mb - 1) == "1024 KB")
     }
+
+    // MARK: previewText around a match
+
+    @Test func previewAroundMatchBeyondLimit() {
+        let text = String(repeating: "a", count: 10_000) + "needle" + String(repeating: "b", count: 10)
+        let preview = ClipFormatting.previewText(text, around: "needle", limit: 4_000)
+        #expect(preview.text.contains("needle"))
+        #expect(preview.hiddenBefore > 0)
+        #expect(preview.text.count <= 4_000)
+        #expect(preview.hiddenBefore + preview.text.count + preview.hiddenAfter == text.count)
+    }
+
+    @Test func previewAroundMatchInsideLimitMatchesPlainPreview() {
+        let text = "hello needle " + String(repeating: "a", count: 10_000)
+        let preview = ClipFormatting.previewText(text, around: "needle", limit: 4_000)
+        let plain = ClipFormatting.previewText(text, limit: 4_000)
+        #expect(preview.hiddenBefore == 0)
+        #expect(preview.text == plain.text)
+        #expect(preview.hiddenAfter == plain.hiddenCharacters)
+    }
+
+    @Test func previewAroundMissingMatchIsPlainPreview() {
+        let text = String(repeating: "a", count: 5_000)
+        let preview = ClipFormatting.previewText(text, around: "zzz", limit: 100)
+        #expect(preview.hiddenBefore == 0 && preview.text.count == 100 && preview.hiddenAfter == 4_900)
+    }
 }
