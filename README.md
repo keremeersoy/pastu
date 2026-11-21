@@ -99,4 +99,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Not decided yet (MIT or GPL-3.0). Until a LICENSE file is added, all rights are reserved by the author.
+[MIT](LICENSE).

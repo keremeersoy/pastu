@@ -34,3 +34,8 @@ so run them in a logged-in GUI session.
 1. Make sure `swift test` passes and the app builds.
 2. Describe what changed and why; link the issue if there is one.
 3. Keep the PR small. One idea per PR is easier to review.
+
+## License
+
+Pastu is released under the [MIT License](LICENSE). By contributing, you agree that your contribution is
+licensed under the same terms.

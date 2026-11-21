@@ -23,6 +23,7 @@ will follow [Semantic Versioning](https://semver.org/) once it has a first relea
 - Database folder `0700`, database files `0600`; old looser permissions are tightened on open.
 - Local self-signed signing script so the Accessibility permission survives rebuilds.
 - Database migrations (`PRAGMA user_version`) from older builds (pins, trigram index).
+- MIT License.
 - GitHub Actions CI, CONTRIBUTING, SECURITY and Code of Conduct.
 
 ### Fixed
