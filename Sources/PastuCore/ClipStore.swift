@@ -82,18 +82,39 @@ public final class ClipStore {
             """, limit: limit)
     }
 
-    /// Full-text search: every word must match as a prefix. Newest matches first.
+    /// Substring search: every term must appear somewhere in the text (any position, any case,
+    /// accents ignored). Pinned clips first, then newest. Punctuation is searchable too ("://").
+    ///
+    /// Terms of 3+ characters use the trigram index. Shorter terms cannot (a trigram needs 3 characters),
+    /// so they are checked with `instr`, which is only case-insensitive for ASCII letters.
     public func search(_ query: String, limit: Int = 50) throws -> [StoredClip] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return try recent(limit: limit) }
+        let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        if terms.isEmpty { return try recent(limit: limit) }
 
-        guard let match = Self.ftsMatchExpression(for: trimmed) else { return [] }
+        let indexed = terms.filter { $0.count >= 3 }
+        let short = terms.filter { $0.count < 3 }
+
+        var conditions: [String] = []
+        var binds: [String] = []
+        let source: String
+        if indexed.isEmpty {
+            source = "clips c"
+        } else {
+            source = "clips_fts f JOIN clips c ON c.id = f.rowid"
+            conditions.append("clips_fts MATCH ?\(binds.count + 2)")
+            binds.append(Self.ftsMatchExpression(for: indexed))
+        }
+        for term in short {
+            conditions.append("instr(lower(c.text), lower(?\(binds.count + 2))) > 0")
+            binds.append(term)
+        }
+
         return try self.query("""
             SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned
-            FROM clips_fts f JOIN clips c ON c.id = f.rowid
-            WHERE clips_fts MATCH ?2
+            FROM \(source)
+            WHERE \(conditions.joined(separator: " AND "))
             ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
-            """, limit: limit, match: match)
+            """, limit: limit, binds: binds)
     }
 
     /// Marks a clip as just used (e.g. pasted from the panel): moves it to the top
@@ -183,15 +204,10 @@ public final class ClipStore {
 
     // MARK: Search query building
 
-    /// Turns user input into a safe FTS5 expression: each word becomes a quoted prefix term,
-    /// so characters like `"`, `(` or `*` can never cause a syntax error.
-    /// Returns nil when the input contains no searchable words.
-    static func ftsMatchExpression(for input: String) -> String? {
-        let terms = input
-            .split(whereSeparator: \.isWhitespace)
-            .filter { $0.contains(where: { $0.isLetter || $0.isNumber }) }
-            .map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"*" }
-        return terms.isEmpty ? nil : terms.joined(separator: " ")
+    /// Turns search terms into a safe FTS5 expression: each term becomes a quoted phrase, so characters
+    /// like `"`, `(` or `*` can never cause a syntax error. With the trigram index a phrase is a substring.
+    static func ftsMatchExpression(for terms: [String]) -> String {
+        terms.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: " ")
     }
 
     // MARK: Schema
@@ -212,7 +228,7 @@ public final class ClipStore {
             CREATE INDEX IF NOT EXISTS clips_last_copied ON clips (last_copied_at DESC);
             CREATE VIRTUAL TABLE IF NOT EXISTS clips_fts USING fts5(
                 text, content='clips', content_rowid='id',
-                tokenize='unicode61 remove_diacritics 2'
+                tokenize='trigram remove_diacritics 1'
             );
             CREATE TRIGGER IF NOT EXISTS clips_ai AFTER INSERT ON clips BEGIN
                 INSERT INTO clips_fts (rowid, text) VALUES (new.id, new.text);
@@ -230,6 +246,30 @@ public final class ClipStore {
             }
             try exec("PRAGMA user_version = 1")
         }
+        if try userVersion() < 2 {
+            // v2: substring search. Databases with the old word-based index get a trigram index,
+            // rebuilt from the clips table (the text itself is untouched).
+            if try ftsUsesWordTokenizer() {
+                try exec("""
+                    BEGIN;
+                    DROP TABLE clips_fts;
+                    CREATE VIRTUAL TABLE clips_fts USING fts5(
+                        text, content='clips', content_rowid='id',
+                        tokenize='trigram remove_diacritics 1'
+                    );
+                    INSERT INTO clips_fts (clips_fts) VALUES ('rebuild');
+                    COMMIT;
+                    """)
+            }
+            try exec("PRAGMA user_version = 2")
+        }
+    }
+
+    private func ftsUsesWordTokenizer() throws -> Bool {
+        let stmt = try prepare("SELECT sql FROM sqlite_master WHERE name = 'clips_fts'")
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW, let sql = sqlite3_column_text(stmt, 0) else { return false }
+        return String(cString: sql).contains("unicode61")
     }
 
     private func userVersion() throws -> Int {
@@ -249,11 +289,12 @@ public final class ClipStore {
 
     // MARK: SQLite helpers
 
-    private func query(_ sql: String, limit: Int, match: String? = nil) throws -> [StoredClip] {
+    /// Runs a clip query. `?1` is the limit; `binds` fill `?2`, `?3`, … in order.
+    private func query(_ sql: String, limit: Int, binds: [String] = []) throws -> [StoredClip] {
         let stmt = try prepare(sql)
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_int64(stmt, 1, Int64(limit))
-        if let match { bind(match, at: 2, in: stmt) }
+        for (offset, value) in binds.enumerated() { bind(value, at: Int32(offset + 2), in: stmt) }
 
         var clips: [StoredClip] = []
         while true {

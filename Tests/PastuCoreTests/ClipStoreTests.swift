@@ -347,6 +347,7 @@ import Testing
         let migrated = try #require(clips.first)
         #expect(migrated.text == "from the past")
         #expect(migrated.isPinned == false)
+        #expect(try store.search("ast").count == 1)   // substring search works after the full upgrade chain
 
         try store.setPinned(id: migrated.id, true)
         #expect(try store.recent().first?.isPinned == true)
@@ -363,5 +364,104 @@ import Testing
         let second = try ClipStore(path: path)
         #expect(try second.recent().first?.isPinned == true)
         _ = first
+    }
+
+    // MARK: Substring search
+
+    @Test func searchFindsSubstringsInsideWords() throws {
+        let store = try ClipStore()
+        try store.insert(clip("Hello World", at: 1))
+        #expect(try store.search("ello").map(\.text) == ["Hello World"])
+        #expect(try store.search("orl").map(\.text) == ["Hello World"])
+        #expect(try store.search("xyz").isEmpty)
+    }
+
+    @Test func searchIgnoresCaseAndDiacritics() throws {
+        let store = try ClipStore()
+        try store.insert(clip("Café Münster", at: 1))
+        #expect(try store.search("CAFE").count == 1)
+        #expect(try store.search("munster").count == 1)
+        #expect(try store.search("CAFÉ").count == 1)
+    }
+
+    @Test func shortQueriesStillWork() throws {
+        let store = try ClipStore()
+        try store.insert(clip("Hello World", at: 1))
+        try store.insert(clip("unrelated", at: 2))
+        #expect(try store.search("he").map(\.text) == ["Hello World"])
+        #expect(try store.search("o").map(\.text) == ["Hello World"])
+        #expect(try store.search("q").isEmpty)
+    }
+
+    @Test func shortAndLongTermsCanBeMixed() throws {
+        let store = try ClipStore()
+        try store.insert(clip("Hello World", at: 1))
+        try store.insert(clip("Hello Mars", at: 2))
+        #expect(try store.search("hello wo").map(\.text) == ["Hello World"])
+        #expect(try store.search("ar hello").map(\.text) == ["Hello Mars"])
+    }
+
+    @Test func punctuationIsSearchable() throws {
+        let store = try ClipStore()
+        try store.insert(clip("see https://example.com/a", at: 1))
+        try store.insert(clip("no link here", at: 2))
+        #expect(try store.search("://").map(\.text) == ["see https://example.com/a"])
+        #expect(try store.search("https://").map(\.text) == ["see https://example.com/a"])
+    }
+
+    @Test func quoteCharactersArePartOfTheSearch() throws {
+        let store = try ClipStore()
+        try store.insert(clip("plain quoted word", at: 1))
+        try store.insert(clip("say \"quoted\" here", at: 2))
+        // Searching with the quotes must only find the clip that really contains them.
+        #expect(try store.search("\"quoted\"").map(\.text) == ["say \"quoted\" here"])
+    }
+
+    @Test func everyTermMustMatchSomewhere() throws {
+        let store = try ClipStore()
+        try store.insert(clip("alpha beta", at: 1))
+        #expect(try store.search("lph eta").count == 1)
+        #expect(try store.search("lph zzz").isEmpty)
+    }
+
+    @Test func substringResultsAreNewestFirst() throws {
+        let store = try ClipStore()
+        try store.insert(clip("project old", at: 1))
+        try store.insert(clip("project new", at: 2))
+        #expect(try store.search("oject").map(\.text) == ["project new", "project old"])
+    }
+
+    @Test func databaseWithTheOldWordIndexIsUpgradedToSubstringSearch() throws {
+        let path = NSTemporaryDirectory() + "pastu-v1-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+
+        // Schema as shipped with pins (version 1): word-based index.
+        var db: OpaquePointer?
+        #expect(sqlite3_open(path, &db) == SQLITE_OK)
+        let v1 = """
+            CREATE TABLE clips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL UNIQUE, source_bundle_id TEXT,
+                first_copied_at REAL NOT NULL, last_copied_at REAL NOT NULL, copy_count INTEGER NOT NULL DEFAULT 1,
+                pinned INTEGER NOT NULL DEFAULT 0);
+            CREATE INDEX clips_last_copied ON clips (last_copied_at DESC);
+            CREATE VIRTUAL TABLE clips_fts USING fts5(text, content='clips', content_rowid='id', tokenize='unicode61 remove_diacritics 2');
+            CREATE TRIGGER clips_ai AFTER INSERT ON clips BEGIN INSERT INTO clips_fts (rowid, text) VALUES (new.id, new.text); END;
+            CREATE TRIGGER clips_ad AFTER DELETE ON clips BEGIN INSERT INTO clips_fts (clips_fts, rowid, text) VALUES ('delete', old.id, old.text); END;
+            INSERT INTO clips (text, first_copied_at, last_copied_at) VALUES ('from the past', 1, 1);
+            PRAGMA user_version = 1;
+            """
+        #expect(sqlite3_exec(db, v1, nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(db)
+
+        let store = try ClipStore(path: path)
+        #expect(try store.search("ast").map(\.text) == ["from the past"])
+        try store.verifyIntegrity()
+
+        // New copies keep being indexed, and deletes keep the index clean.
+        let id = try store.insert(clip("another clip", at: 2))
+        #expect(try store.search("nother").count == 1)
+        try store.delete(id: id)
+        try store.verifyIntegrity()
+        #expect(try store.search("nother").isEmpty)
     }
 }
