@@ -161,7 +161,13 @@ private final class FakeSource: ClipboardSource {
         // AppKit marks event-tracking as a common mode; without NSApplication in tests, do the same for a stand-in mode.
         let trackingMode = CFRunLoopMode("pastu.test.tracking" as CFString)
         CFRunLoopAddCommonMode(CFRunLoopGetMain(), trackingMode)
-        RunLoop.current.run(mode: RunLoop.Mode("pastu.test.tracking"), before: Date().addingTimeInterval(0.3))
+        // `run(mode:before:)` returns as soon as any input source is handled (for example a main-queue block from
+        // another test running in parallel), so keep running the tracking mode until the copy arrives or time is up.
+        // The timer still has to fire in the tracking mode for this to pass.
+        let deadline = Date().addingTimeInterval(2)
+        while received.isEmpty, Date() < deadline {
+            RunLoop.current.run(mode: RunLoop.Mode("pastu.test.tracking"), before: deadline)
+        }
         #expect(received == ["while menu open"])
     }
 
