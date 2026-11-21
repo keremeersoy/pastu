@@ -208,6 +208,15 @@ public final class ClipStore {
         return ids.count
     }
 
+    /// Deletes the whole history, or everything except pinned clips. Returns how many clips were deleted.
+    @discardableResult
+    public func clear(keepPinned: Bool) throws -> Int {
+        let stmt = try prepare(keepPinned ? "DELETE FROM clips WHERE pinned = 0" : "DELETE FROM clips")
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
+        return Int(sqlite3_changes(db))
+    }
+
     /// Pinned clips stay on top of the list and are never pruned. Pinning is not a copy: it changes nothing else.
     public func setPinned(id: Int64, _ pinned: Bool) throws {
         let stmt = try prepare("UPDATE clips SET pinned = ?2 WHERE id = ?1")

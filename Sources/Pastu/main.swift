@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Set when the history database could not be opened or written; shown in the menu.
     private var storageError: String?
     private let retention = RetentionPolicy()
+    private let recording = RecordingState(defaults: .standard)
+    private var model: ClipListModel?
+    private var pauseItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -23,12 +26,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.store = store
             try store.prune(retention)
             let model = ClipListModel(store: store)
+            self.model = model
             let panelController = PanelController(model: model, canAutoPaste: { PasteSender.isTrusted }) { [weak self] clip in
                 self?.paste(clip)
             }
             self.panelController = panelController
 
-            let monitor = ClipboardMonitor(source: systemPasteboard, filter: PrivacyFilter()) { [weak self] clip in
+            let monitor = ClipboardMonitor(source: systemPasteboard, filter: PrivacyFilter(), recording: recording) { [weak self] clip in
                 guard let self else { return }
                 do {
                     try store.insert(clip)
@@ -97,6 +101,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    @objc private func toggleRecording() {
+        recording.toggle()
+        updatePauseUI()
+    }
+
+    private func updatePauseUI() {
+        pauseItem?.title = recording.isPaused ? "Resume recording" : "Pause recording"
+        let symbol = recording.isPaused ? "pause.circle" : "doc.on.clipboard"
+        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: PastuInfo.name)
+        statusItem?.button?.appearsDisabled = recording.isPaused
+    }
+
+    @objc private func clearHistory() {
+        guard let store else { return }
+        let alert = NSAlert()
+        alert.messageText = "Clear clipboard history?"
+        alert.informativeText = "All clips except pinned ones will be deleted. This cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear History")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try store.clear(keepPinned: true)
+            storageError = nil
+        } catch {
+            NSLog("Pastu could not clear the history: \(error)")
+            storageError = "could not clear: \(error)"
+        }
+        model?.refresh()
+    }
+
     @objc private func togglePanel() {
         panelController?.toggle()
     }
@@ -146,6 +181,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(withTitle: "Show \(PastuInfo.name)", action: #selector(togglePanel), keyEquivalent: "")
             .target = self
+        let pause = menu.addItem(withTitle: "Pause recording", action: #selector(toggleRecording), keyEquivalent: "")
+        pause.target = self
+        pauseItem = pause
+        menu.addItem(withTitle: "Clear history…", action: #selector(clearHistory), keyEquivalent: "")
+            .target = self
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Quit \(PastuInfo.name)",
@@ -154,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         item.menu = menu
         statusItem = item
+        updatePauseUI()
     }
 
     /// ~/Library/Application Support/Pastu/history.sqlite (created on first launch).

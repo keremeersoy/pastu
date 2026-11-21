@@ -540,4 +540,47 @@ import Testing
         try store.prune(RetentionPolicy(maxCount: nil, maxAge: nil, maxTotalBytes: cap))
         #expect(try store.recent().map { $0.text.prefix(2) } == ["1-"])
     }
+
+    // MARK: Clear history
+
+    @Test func clearRemovesEverythingAndTheSearchIndexWithIt() throws {
+        let store = try ClipStore()
+        for i in 1...3 { try store.insert(clip("clip number \(i)", at: Double(i))) }
+        #expect(try store.clear(keepPinned: false) == 3)
+        #expect(try store.recent().isEmpty)
+        #expect(try store.search("number").isEmpty)
+        try store.verifyIntegrity()
+    }
+
+    @Test func clearKeepingPinnedLeavesOnlyPinnedClips() throws {
+        let store = try ClipStore()
+        let keep = try store.insert(clip("keep me", at: 1))
+        try store.insert(clip("drop me", at: 2))
+        try store.setPinned(id: keep, true)
+        #expect(try store.clear(keepPinned: true) == 1)
+        #expect(try store.recent().map(\.text) == ["keep me"])
+        #expect(try store.search("keep").count == 1)
+        #expect(try store.search("drop").isEmpty)
+        try store.verifyIntegrity()
+    }
+
+    @Test func clearNotKeepingPinnedRemovesPinnedToo() throws {
+        let store = try ClipStore()
+        let id = try store.insert(clip("pinned", at: 1))
+        try store.setPinned(id: id, true)
+        #expect(try store.clear(keepPinned: false) == 1)
+        #expect(try store.recent().isEmpty)
+    }
+
+    @Test func clearOnEmptyStoreReturnsZero() throws {
+        #expect(try ClipStore().clear(keepPinned: true) == 0)
+    }
+
+    @Test func storeIsUsableAfterClear() throws {
+        let store = try ClipStore()
+        try store.insert(clip("before", at: 1))
+        try store.clear(keepPinned: true)
+        try store.insert(clip("after", at: 2))
+        #expect(try store.search("after").count == 1)
+    }
 }

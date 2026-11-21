@@ -23,6 +23,7 @@ public struct CapturedClip: Equatable, Sendable {
 public final class ClipboardMonitor {
     private let source: ClipboardSource
     private let filter: PrivacyFilter
+    private let recording: RecordingState
     private let onCapture: (CapturedClip) -> Void
     private var lastChangeCount: Int
     private var timer: Timer?
@@ -31,10 +32,12 @@ public final class ClipboardMonitor {
     public init(
         source: ClipboardSource,
         filter: PrivacyFilter,
+        recording: RecordingState = RecordingState(),
         onCapture: @escaping (CapturedClip) -> Void
     ) {
         self.source = source
         self.filter = filter
+        self.recording = recording
         self.onCapture = onCapture
         self.lastChangeCount = source.changeCount
     }
@@ -62,6 +65,9 @@ public final class ClipboardMonitor {
         let count = source.changeCount
         guard count != lastChangeCount else { return }
         lastChangeCount = count
+
+        // Paused: the change is consumed (so it is not captured after resuming) but never looked at.
+        guard !recording.isPaused else { return }
 
         // Look at metadata first: never read the content of concealed/transient/ignored-app copies.
         guard filter.shouldReadContent(of: source.snapshot(includingText: false)) else { return }
