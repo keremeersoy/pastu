@@ -29,7 +29,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try store.prune(retention)
             let model = ClipListModel(store: store)
             self.model = model
-            let panelController = PanelController(model: model, canAutoPaste: { PasteSender.isTrusted }, ignoredApps: ignoredApps) { [weak self] clip in
+            let panelController = PanelController(
+                model: model,
+                canAutoPaste: { PasteSender.isTrusted },
+                ignoredApps: ignoredApps,
+                imageData: { id in (try? store.imageData(id: id)) ?? nil }
+            ) { [weak self] clip in
                 self?.paste(clip)
             }
             self.panelController = panelController
@@ -79,11 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Puts the clip on the pasteboard and sends ⌘V to the app the user came from.
     private func paste(_ clip: StoredClip) {
-        monitor?.copyToPasteboard(clip.text)
-        try? store?.markUsed(id: clip.id)
+        // Text or picture, written without Pastu recapturing its own write. Nothing to paste if the picture is gone.
+        guard let store, let monitor, ClipPasteboardWriter.copy(clip, from: store, using: monitor) else { return }
+        try? store.markUsed(id: clip.id)
 
         guard PasteSender.isTrusted else {
-            // The text is already on the clipboard, so a manual ⌘V still works.
+            // The clip is already on the clipboard, so a manual ⌘V still works.
             if !didPromptForAccessibility {
                 didPromptForAccessibility = true
                 PasteSender.requestTrust()

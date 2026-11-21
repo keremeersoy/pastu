@@ -11,6 +11,8 @@ struct PanelView: View {
     let canAutoPaste: Bool
     let onSubmit: () -> Void
     var onIgnoreApp: () -> Void = {}
+    /// Loads a picture clip's PNG bytes; the default shows a placeholder.
+    var imageData: (Int64) -> Data? = { _ in nil }
 
     @FocusState private var searchFocused: Bool
 
@@ -58,7 +60,7 @@ struct PanelView: View {
                 HStack(spacing: 0) {
                     list.frame(width: PanelMetrics.listWidth)
                     Divider()
-                    PreviewPane(clip: model.selectedClip)
+                    PreviewPane(clip: model.selectedClip, imageData: imageData)
                 }
             }
 
@@ -85,7 +87,10 @@ struct PanelView: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(model.clips.enumerated()), id: \.element.id) { index, clip in
-                        ClipRow(clip: clip, isSelected: index == model.selectedIndex, shortcutDigit: index < 9 ? index + 1 : nil)
+                        ClipRow(
+                            clip: clip, isSelected: index == model.selectedIndex,
+                            shortcutDigit: index < 9 ? index + 1 : nil, imageData: imageData
+                        )
                             .id(clip.id)
                     }
                 }
@@ -124,12 +129,18 @@ private struct ClipRow: View {
     let clip: StoredClip
     let isSelected: Bool
     let shortcutDigit: Int?
+    let imageData: (Int64) -> Data?
 
     var body: some View {
+        let picture = clip.kind == .image ? ImageCache.shared.info(for: clip.id, load: imageData) : nil
         HStack(spacing: 10) {
-            AppIconView(bundleIdentifier: clip.sourceBundleIdentifier, size: 22)
+            if clip.kind == .image {
+                ThumbnailView(info: picture)
+            } else {
+                AppIconView(bundleIdentifier: clip.sourceBundleIdentifier, size: 22)
+            }
             VStack(alignment: .leading, spacing: 2) {
-                Text(ClipFormatting.rowTitle(clip.text))
+                Text(title(picture))
                     .lineLimit(1)
                 Text(subtitle)
                     .font(.caption)
@@ -156,6 +167,12 @@ private struct ClipRow: View {
         )
     }
 
+    private func title(_ picture: ImageCache.Info?) -> String {
+        guard clip.kind == .image else { return ClipFormatting.rowTitle(clip.text) }
+        guard let picture else { return "Image" }
+        return "Image · \(picture.width)×\(picture.height)"
+    }
+
     private var subtitle: String {
         let time = ClipFormatting.relativeTime(from: clip.lastCopiedAt, to: Date())
         guard let app = AppLookup.name(for: clip.sourceBundleIdentifier) else { return time }
@@ -165,10 +182,11 @@ private struct ClipRow: View {
 
 private struct PreviewPane: View {
     let clip: StoredClip?
+    let imageData: (Int64) -> Data?
 
     var body: some View {
         if let clip {
-            let preview = ClipFormatting.previewText(clip.text)
+            let preview = clip.kind == .image ? (text: "", hiddenCharacters: 0) : ClipFormatting.previewText(clip.text)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     AppIconView(bundleIdentifier: clip.sourceBundleIdentifier, size: 20)
@@ -181,17 +199,21 @@ private struct PreviewPane: View {
                     }
                 }
 
-                ScrollView {
-                    Text(preview.text)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if preview.hiddenCharacters > 0 {
-                        Text("… \(preview.hiddenCharacters) more characters")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                if clip.kind == .image {
+                    picturePreview(for: clip)
+                } else {
+                    ScrollView {
+                        Text(preview.text)
+                            .font(.system(.callout, design: .monospaced))
+                            .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 6)
+                        if preview.hiddenCharacters > 0 {
+                            Text("… \(preview.hiddenCharacters) more characters")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 6)
+                        }
                     }
                 }
 
@@ -208,9 +230,48 @@ private struct PreviewPane: View {
         }
     }
 
+    @ViewBuilder
+    private func picturePreview(for clip: StoredClip) -> some View {
+        if let image = ImageCache.shared.fullImage(for: clip.id, load: imageData) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Label("Picture not available", systemImage: "photo")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
     private func details(for clip: StoredClip) -> String {
-        let stats = ClipFormatting.stats(clip.text)
+        let stats: String
+        if clip.kind == .image {
+            let picture = ImageCache.shared.info(for: clip.id, load: imageData)
+            stats = picture.map { "\($0.width)×\($0.height) · \(ClipFormatting.fileSize($0.byteCount))" } ?? "Image"
+        } else {
+            stats = ClipFormatting.stats(clip.text)
+        }
         return clip.copyCount > 1 ? "\(stats) · copied \(clip.copyCount) times" : stats
+    }
+}
+
+private struct ThumbnailView: View {
+    let info: ImageCache.Info?
+
+    var body: some View {
+        Group {
+            if let info {
+                Image(nsImage: info.thumbnail)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "photo").foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 28, height: 28)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.quaternary))
     }
 }
 

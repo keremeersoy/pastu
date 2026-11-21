@@ -11,6 +11,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let onSelect: (StoredClip) -> Void
     private let canAutoPaste: () -> Bool
     private let ignoredApps: IgnoredApps
+    private let imageData: (Int64) -> Data?
     let panel = ClipPanel(size: PanelController.size)
 
     var isVisible: Bool { panel.isVisible }
@@ -21,11 +22,13 @@ final class PanelController: NSObject, NSWindowDelegate {
         model: ClipListModel,
         canAutoPaste: @escaping () -> Bool,
         ignoredApps: IgnoredApps = IgnoredApps(),
+        imageData: @escaping (Int64) -> Data? = { _ in nil },
         onSelect: @escaping (StoredClip) -> Void
     ) {
         self.model = model
         self.canAutoPaste = canAutoPaste
         self.ignoredApps = ignoredApps
+        self.imageData = imageData
         self.onSelect = onSelect
         super.init()
         panel.delegate = self
@@ -45,7 +48,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             model: model,
             canAutoPaste: canAutoPaste(),
             onSubmit: { [weak self] in self?.submit() },
-            onIgnoreApp: { [weak self] in self?.ignoreSelectedApp() }
+            onIgnoreApp: { [weak self] in self?.ignoreSelectedApp() },
+            imageData: imageData
         ))
         panel.setFrameOrigin(origin(on: screenUnderMouse()))
         panel.makeKeyAndOrderFront(nil)

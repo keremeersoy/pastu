@@ -28,6 +28,32 @@ extension ShellTests {
         return model
     }
 
+    /// A recognisable picture (diagonal gradient with a bright block) so thumbnails and previews are easy to judge.
+    private func samplePicture(_ width: Int, _ height: Int) -> Data {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGradient(starting: .systemIndigo, ending: .systemOrange)!.draw(in: NSRect(x: 0, y: 0, width: width, height: height), angle: 35)
+        NSColor.white.withAlphaComponent(0.85).setFill()
+        NSRect(x: width / 8, y: height / 8, width: width / 4, height: height / 4).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .png, properties: [:])!
+    }
+
+    /// Text clips plus two screenshots; the loader hands the pictures to the panel like the app does.
+    private func pictureSample() throws -> (ClipListModel, (Int64) -> Data?) {
+        let store = try ClipStore()
+        let now = Date()
+        try store.insert(CapturedClip(text: "Notes about the launch plan", sourceBundleIdentifier: "com.apple.Notes", date: now.addingTimeInterval(-3_600)))
+        try store.insert(.image(png: samplePicture(1440, 900), sourceBundleIdentifier: "com.apple.screencaptureui", date: now.addingTimeInterval(-120)))
+        try store.insert(.image(png: samplePicture(600, 600), sourceBundleIdentifier: "com.apple.Preview", date: now.addingTimeInterval(-900)))
+        let model = ClipListModel(store: store)
+        return (model, { id in (try? store.imageData(id: id)) ?? nil })
+    }
+
     /// Hosts the view in a real window and captures the window's own drawing, so AppKit-backed
     /// controls (text field, scroll views) render. ImageRenderer cannot draw those.
     private func render(_ view: some View) async throws -> NSImage {
@@ -94,6 +120,24 @@ extension ShellTests {
         model.notice = "Ignoring Terminal: its future copies are not recorded or read"
         let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
         save(image, name: "panel-notice")
+    }
+    @Test func panelRendersPictureClips() async throws {
+        let (model, loader) = try pictureSample()
+        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}, imageData: loader))
+        save(image, name: "panel-pictures")
+    }
+
+    @Test func panelRendersThePictureFilter() async throws {
+        let (model, loader) = try pictureSample()
+        model.filter = .images
+        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}, imageData: loader))
+        save(image, name: "panel-pictures-filter")
+    }
+
+    @Test func panelRendersAPictureWhoseBytesAreMissing() async throws {
+        let (model, _) = try pictureSample()
+        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}, imageData: { _ in nil }))
+        save(image, name: "panel-picture-missing")
     }
 }
 }
