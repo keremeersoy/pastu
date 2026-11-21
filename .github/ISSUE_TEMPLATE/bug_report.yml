@@ -24,7 +24,7 @@ body:
     id: version
     attributes:
       label: Pastu version or commit
-      placeholder: "e.g. 0.0.1 or a commit hash"
+      placeholder: "e.g. 0.1.0 or a commit hash"
     validations:
       required: true
   - type: checkboxes
@@ -41,3 +41,9 @@ body:
     id: steps
     attributes:
       label: Steps to reproduce
+      placeholder: |
+        1. Copy ...
+        2. Press ⌘⇧V ...
+        3. ...
+    validations:
+      required: true

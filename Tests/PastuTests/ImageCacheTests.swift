@@ -4,6 +4,8 @@ import Testing
 @testable import Pastu
 @testable import PastuCore
 
+// Deliberately duplicates the PNG helper in PastuCoreTests/TestImages.swift: SwiftPM test targets cannot share
+// source files, and a shared helper target is not worth it for a few lines.
 private func makePNG(_ width: Int, _ height: Int) -> Data {
     let rep = NSBitmapImageRep(
         bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
