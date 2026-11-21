@@ -105,5 +105,74 @@ extension ShellTests {
         await pump(0.2)
         #expect(model.filter == .all)
     }
+    /// Goes through PanelController, the real wiring, rather than a hand-assembled panel.
+    @Test func commandBackspaceDeletesTheSelectedClip() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+
+        let store = try ClipStore()
+        for (i, text) in ["oldest", "middle", "newest"].enumerated() {
+            try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        let model = ClipListModel(store: store)
+        model.moveSelection(by: 1) // on "middle"
+
+        let controller = PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+
+        NSApp.sendEvent(keyEvent("\u{7F}", keyCode: 51, modifiers: .command, window: controller.panel))
+        await pump(0.2)
+        #expect(model.clips.map(\.text) == ["newest", "oldest"])
+    }
+
+    /// Plain Backspace must keep editing the search text, never delete a clip.
+    @Test func plainBackspaceDoesNotDeleteAClip() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+
+        let store = try ClipStore()
+        for (i, text) in ["oldest", "newest"].enumerated() {
+            try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        let model = ClipListModel(store: store)
+
+        let controller = PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+
+        NSApp.sendEvent(keyEvent("\u{7F}", keyCode: 51, modifiers: [], window: controller.panel))
+        await pump(0.2)
+        #expect(model.clips.count == 2)
+    }
+    // The delete shortcut must be exactly ⌘⌫. These call the panel directly, so they hold no matter which
+    // events AppKit chooses to route through performKeyEquivalent.
+    @Test(arguments: [
+        NSEvent.ModifierFlags([]),                 // plain Backspace edits the search text
+        NSEvent.ModifierFlags([.shift]),
+        NSEvent.ModifierFlags([.option]),
+        NSEvent.ModifierFlags([.control]),
+        NSEvent.ModifierFlags([.command, .shift]),
+        NSEvent.ModifierFlags([.command, .option]),
+    ])
+    func onlyExactlyCommandBackspaceDeletes(modifiers: NSEvent.ModifierFlags) {
+        let panel = ClipPanel(size: NSSize(width: 100, height: 100))
+        var deletes = 0
+        panel.onDeleteSelected = { deletes += 1 }
+        let event = keyEvent("\u{7F}", keyCode: 51, modifiers: modifiers, window: panel)
+        _ = panel.performKeyEquivalent(with: event)
+        #expect(deletes == 0)
+    }
+
+    @Test func commandBackspaceIsHandledByThePanel() {
+        let panel = ClipPanel(size: NSSize(width: 100, height: 100))
+        var deletes = 0
+        panel.onDeleteSelected = { deletes += 1 }
+        let handled = panel.performKeyEquivalent(with: keyEvent("\u{7F}", keyCode: 51, modifiers: .command, window: panel))
+        #expect(handled)
+        #expect(deletes == 1)
+    }
 }
 }

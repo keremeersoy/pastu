@@ -171,4 +171,64 @@ import Testing
         #expect(model.selectedClip == nil)
         #expect(model.selectedIndex == 0)
     }
+
+    // MARK: Delete
+
+    @Test func deleteSelectedRemovesTheClipFromTheListAndTheStore() throws {
+        let store = try makeStore(["a", "b", "c"])        // list: c, b, a
+        let model = ClipListModel(store: store)
+        model.moveSelection(by: 1)                         // on "b"
+        model.deleteSelected()
+        #expect(model.clips.map(\.text) == ["c", "a"])
+        #expect(ClipListModel(store: store).clips.map(\.text) == ["c", "a"])   // really gone from the database
+    }
+
+    @Test func afterDeletingTheNextClipTakesItsRow() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b", "c"]))
+        model.moveSelection(by: 1)
+        model.deleteSelected()
+        #expect(model.selectedIndex == 1)
+        #expect(model.selectedClip?.text == "a")
+    }
+
+    @Test func deletingTheLastRowMovesTheSelectionUp() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b", "c"]))
+        model.moveSelection(by: 2)                         // on "a", the last row
+        model.deleteSelected()
+        #expect(model.selectedIndex == 1)
+        #expect(model.selectedClip?.text == "b")
+    }
+
+    @Test func deletingTheOnlyClipLeavesAnEmptyList() throws {
+        let model = ClipListModel(store: try makeStore(["only"]))
+        model.deleteSelected()
+        #expect(model.clips.isEmpty)
+        #expect(model.selectedClip == nil)
+        #expect(model.selectedIndex == 0)
+    }
+
+    @Test func deleteWithNoSelectionDoesNothing() throws {
+        let store = try makeStore(["a"])
+        let model = ClipListModel(store: store)
+        model.query = "zzz"
+        model.deleteSelected()
+        model.query = ""
+        #expect(model.clips.map(\.text) == ["a"])
+    }
+
+    @Test func deletingKeepsTheCurrentSearchAndFilter() throws {
+        let model = ClipListModel(store: try makeStore(["x1", "other", "x2"]))   // list: x2, other, x1
+        model.query = "x"
+        model.deleteSelected()                             // removes x2
+        #expect(model.query == "x")
+        #expect(model.clips.map(\.text) == ["x1"])
+    }
+
+    @Test func pinnedClipsCanBeDeletedOnPurpose() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b"]))
+        model.togglePinSelected()                          // pins "b" (top row)
+        #expect(model.selectedClip?.isPinned == true)
+        model.deleteSelected()
+        #expect(model.clips.map(\.text) == ["a"])
+    }
 }

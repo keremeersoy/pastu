@@ -236,6 +236,7 @@ private struct HintFooter: View {
             }
             Text("⌘1–9 Quick paste")
             Text("⌘P Pin")
+            Text("⌘⌫ Delete")
             Text("⇥ Filter")
             Text("↑↓ Select")
             Text("esc Close")

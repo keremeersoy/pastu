@@ -4,6 +4,8 @@ import AppKit
 /// so the app the user was typing in keeps its focus (needed for pasting back later).
 final class ClipPanel: NSPanel {
     var onCancel: (() -> Void)?
+    /// ⌘⌫. Handled here because the search field's text editor consumes Backspace before SwiftUI sees it.
+    var onDeleteSelected: (() -> Void)?
 
     init(size: NSSize) {
         super.init(
@@ -22,6 +24,16 @@ final class ClipPanel: NSPanel {
     }
 
     override var canBecomeKey: Bool { true }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let backspaceKeyCode: UInt16 = 51
+        if event.keyCode == backspaceKeyCode,
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+            onDeleteSelected?()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     /// Esc.
     override func cancelOperation(_ sender: Any?) {

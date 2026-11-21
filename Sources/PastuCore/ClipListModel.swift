@@ -64,6 +64,14 @@ public final class ClipListModel {
         if let index = clips.firstIndex(where: { $0.id == clip.id }) { selectedIndex = index }
     }
 
+    /// Deletes the selected clip from the history (pinned ones too: deleting is an explicit act).
+    /// The next clip takes its row, or the selection moves up when the last row was deleted.
+    public func deleteSelected() {
+        guard let clip = selectedClip else { return }
+        try? store.delete(id: clip.id)
+        reload()   // clamps the selection into range
+    }
+
     public func moveSelection(by delta: Int) {
         guard !clips.isEmpty else { return }
         selectedIndex = min(max(selectedIndex + delta, 0), clips.count - 1)

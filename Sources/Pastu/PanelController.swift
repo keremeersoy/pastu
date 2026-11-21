@@ -10,7 +10,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let model: ClipListModel
     private let onSelect: (StoredClip) -> Void
     private let canAutoPaste: () -> Bool
-    private let panel = ClipPanel(size: PanelController.size)
+    let panel = ClipPanel(size: PanelController.size)
 
     var isVisible: Bool { panel.isVisible }
 
@@ -23,6 +23,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         super.init()
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.hide() }
+        panel.onDeleteSelected = { [weak self] in self?.model.deleteSelected() }
     }
 
     func toggle() {

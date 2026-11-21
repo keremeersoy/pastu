@@ -12,7 +12,8 @@ A fast, local-first, privacy-focused clipboard manager for macOS. Open source, f
 - Type to search: substring match anywhere in the text (SQLite FTS5 trigram index), case- and accent-insensitive.
   Every word must match. Words shorter than 3 characters are matched without the index and are only
   case-insensitive for ASCII letters.
-- ↑ ↓ to select, **Return** to paste, **⌘1–⌘9** to paste a row directly, **⌘P** to pin or unpin, **Esc** to close.
+- ↑ ↓ to select, **Return** to paste, **⌘1–⌘9** to paste a row directly, **⌘P** to pin or unpin,
+  **⌘⌫** to delete the selected clip from the history (pinned ones too), **Esc** to close.
 - Pinned clips stay on top and are never deleted automatically.
 - Two-pane panel: list with source app and relative time, plus a preview of the selected clip.
 - **Tab** cycles the type filter above the list: All, Text, Links (a link is a clip that is only one http/https
