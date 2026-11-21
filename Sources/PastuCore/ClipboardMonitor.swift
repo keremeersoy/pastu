@@ -41,9 +41,13 @@ public final class ClipboardMonitor {
 
     public func start(interval: TimeInterval = 0.5) {
         stop()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
+        // Common modes: the default mode alone stops firing while a menu is open or a drag is tracked,
+        // and copies made at that moment would be missed.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     public func stop() {

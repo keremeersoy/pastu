@@ -213,6 +213,9 @@ public final class ClipStore {
     // MARK: Schema
 
     private func migrate() throws {
+        // Deleted clips must not linger in free pages: overwrite them (the system SQLite only does so by
+        // default on some builds, so ask for it explicitly).
+        try exec("PRAGMA secure_delete = ON")
         // `text` is never updated in place, so the FTS index needs only insert/delete triggers.
         try exec("""
             PRAGMA journal_mode = WAL;
@@ -303,8 +306,8 @@ public final class ClipStore {
             guard rc == SQLITE_ROW else { throw lastError() }
             clips.append(StoredClip(
                 id: sqlite3_column_int64(stmt, 0),
-                text: String(cString: sqlite3_column_text(stmt, 1)),
-                sourceBundleIdentifier: sqlite3_column_text(stmt, 2).map { String(cString: $0) },
+                text: Self.columnString(stmt, 1) ?? "",
+                sourceBundleIdentifier: Self.columnString(stmt, 2),
                 firstCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3)),
                 lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
                 copyCount: Int(sqlite3_column_int64(stmt, 5)),
@@ -312,6 +315,13 @@ public final class ClipStore {
             ))
         }
         return clips
+    }
+
+    /// Reads a text column by byte length, so embedded NULs survive. `nil` for SQL NULL.
+    private static func columnString(_ stmt: OpaquePointer, _ index: Int32) -> String? {
+        guard let pointer = sqlite3_column_text(stmt, index) else { return nil }
+        let count = Int(sqlite3_column_bytes(stmt, index))
+        return String(decoding: UnsafeBufferPointer(start: pointer, count: count), as: UTF8.self)
     }
 
     private func exec(_ sql: String) throws {
@@ -326,7 +336,8 @@ public final class ClipStore {
 
     private func bind(_ value: String?, at index: Int32, in stmt: OpaquePointer) {
         if let value {
-            sqlite3_bind_text(stmt, index, value, -1, Self.transient)
+            // Explicit byte length: with -1 SQLite stops at the first NUL and would silently truncate the text.
+            sqlite3_bind_text(stmt, index, value, Int32(value.utf8.count), Self.transient)
         } else {
             sqlite3_bind_null(stmt, index)
         }

@@ -196,6 +196,47 @@ import Testing
         #expect(try store.search("keep").count == 1)
     }
 
+    @Test func textWithEmbeddedNulIsStoredWhole() throws {
+        let store = try ClipStore()
+        try store.insert(clip("head\u{0}tail-one", at: 1))
+        try store.insert(clip("head\u{0}tail-two", at: 2))
+        #expect(try store.recent().map(\.text) == ["head\u{0}tail-two", "head\u{0}tail-one"])
+    }
+
+    // MARK: Deleted text must really be gone
+
+    private func diskBytes(at path: String) -> Data {
+        ["", "-wal"].reduce(into: Data()) { all, suffix in
+            if let data = FileManager.default.contents(atPath: path + suffix) { all.append(data) }
+        }
+    }
+
+    @Test func deletedClipTextIsOverwrittenOnDisk() throws {
+        let path = NSTemporaryDirectory() + "pastu-secure-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+        let marker = "correct-horse-battery-staple-\(UUID().uuidString)"
+
+        do {
+            let store = try ClipStore(path: path)
+            let id = try store.insert(clip(marker, at: 1))
+            try store.delete(id: id)
+        } // store closed: WAL checkpointed into the main file
+        #expect(diskBytes(at: path).range(of: Data(marker.utf8)) == nil)
+    }
+
+    @Test func prunedClipTextIsOverwrittenOnDisk() throws {
+        let path = NSTemporaryDirectory() + "pastu-secure-\(UUID().uuidString).sqlite"
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: path + suffix) } }
+        let marker = "hunter2-hunter2-hunter2-\(UUID().uuidString)"
+
+        do {
+            let store = try ClipStore(path: path)
+            try store.insert(clip(marker, at: 1))
+            try store.prune(RetentionPolicy(maxCount: 0, maxAge: nil))
+        }
+        #expect(diskBytes(at: path).range(of: Data(marker.utf8)) == nil)
+    }
+
     // MARK: File permissions
 
     private func permissions(of path: String) throws -> Int {

@@ -9,6 +9,9 @@ Thanks for helping! Pastu is small on purpose: keep changes focused.
 - **Test-first.** Every behavior change comes with a test, especially in the clipboard filter and the
   database layer. Write the test, watch it fail for the right reason, then make it pass.
 - Keep code, comments and commit messages in English.
+- Never log clipboard content (no `NSLog`/`print` of copied text, or of errors that embed it).
+
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security problems: see [SECURITY.md](SECURITY.md).
 
 ## Setup
 
@@ -18,7 +21,8 @@ swift test
 ./scripts/build-app.sh && open build/Pastu.app
 ```
 
-Requires macOS 15+ and Xcode 26+.
+Requires macOS 15+ and Xcode 26+ (the macOS 26 SDK is needed to compile). Some tests open real windows,
+so run them in a logged-in GUI session.
 
 ## Where things go
 
