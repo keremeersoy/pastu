@@ -117,4 +117,58 @@ import Testing
         model.togglePinSelected()
         #expect(model.clips.isEmpty)
     }
+
+    // MARK: Type filter
+
+    @Test func filterShowsOnlyLinksOrOnlyText() throws {
+        let model = ClipListModel(store: try makeStore(["note", "https://a.com", "other", "https://b.com"]))
+        model.filter = .links
+        #expect(model.clips.map(\.text) == ["https://b.com", "https://a.com"])
+        model.filter = .text
+        #expect(model.clips.map(\.text) == ["other", "note"])
+        model.filter = .all
+        #expect(model.clips.count == 4)
+    }
+
+    @Test func filterCombinesWithSearch() throws {
+        let model = ClipListModel(store: try makeStore(["swift note", "https://swift.org", "https://apple.com"]))
+        model.query = "swift"
+        model.filter = .links
+        #expect(model.clips.map(\.text) == ["https://swift.org"])
+    }
+
+    @Test func changingFilterResetsSelectionToTop() throws {
+        let model = ClipListModel(store: try makeStore(["a", "https://x.com", "b"]))
+        model.moveSelection(by: 2)
+        model.filter = .text
+        #expect(model.selectedIndex == 0)
+    }
+
+    @Test func cycleFilterGoesAllTextLinksAll() throws {
+        let model = ClipListModel(store: try makeStore(["a"]))
+        #expect(model.filter == .all)
+        model.cycleFilter()
+        #expect(model.filter == .text)
+        model.cycleFilter()
+        #expect(model.filter == .links)
+        model.cycleFilter()
+        #expect(model.filter == .all)
+    }
+
+    @Test func refreshKeepsTheFilter() throws {
+        let store = try makeStore(["a", "https://x.com"])
+        let model = ClipListModel(store: store)
+        model.filter = .links
+        try store.insert(CapturedClip(text: "https://y.com", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 99)))
+        model.refresh()
+        #expect(model.clips.map(\.text) == ["https://y.com", "https://x.com"])
+    }
+
+    @Test func filteringToNothingGivesAnEmptyListWithSafeSelection() throws {
+        let model = ClipListModel(store: try makeStore(["a", "b"]))
+        model.filter = .links
+        #expect(model.clips.isEmpty)
+        #expect(model.selectedClip == nil)
+        #expect(model.selectedIndex == 0)
+    }
 }

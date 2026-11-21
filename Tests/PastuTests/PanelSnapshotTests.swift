@@ -73,5 +73,21 @@ extension ShellTests {
         let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
         save(image, name: "panel-empty")
     }
+
+    @Test func panelRendersLinksFilter() async throws {
+        let model = try sampleModel()
+        model.filter = .links
+        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        save(image, name: "panel-links-filter")
+    }
+
+    @Test func panelRendersEmptyFilteredState() async throws {
+        let store = try ClipStore()
+        try store.insert(CapturedClip(text: "just a note", sourceBundleIdentifier: nil, date: Date()))
+        let model = ClipListModel(store: store)
+        model.filter = .links
+        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        save(image, name: "panel-links-empty")
+    }
 }
 }

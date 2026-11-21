@@ -13,8 +13,10 @@ private final class FakeSource: ClipboardSource {
     }
 
     private(set) var textReads = 0
+    private(set) var snapshotCalls = 0
 
     func snapshot(includingText: Bool) -> PasteboardSnapshot {
+        snapshotCalls += 1
         var result = current
         if includingText { textReads += 1 } else { result.text = nil }
         return result
@@ -157,5 +159,95 @@ private final class FakeSource: ClipboardSource {
         CFRunLoopAddCommonMode(CFRunLoopGetMain(), trackingMode)
         RunLoop.current.run(mode: RunLoop.Mode("pastu.test.tracking"), before: Date().addingTimeInterval(0.3))
         #expect(received == ["while menu open"])
+    }
+
+    // MARK: Pause
+
+    @Test func copiesMadeWhilePausedAreNeitherCapturedNorRead() {
+        let source = FakeSource()
+        let recording = RecordingState()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter(), recording: recording) { received.append($0.text) }
+
+        recording.isPaused = true
+        source.copy(plain("secret while paused"))
+        monitor.poll()
+        #expect(received.isEmpty)
+        #expect(source.snapshotCalls == 0) // not even metadata was looked at
+        #expect(source.textReads == 0)
+    }
+
+    @Test func copyMadeWhilePausedIsNotCapturedAfterResume() {
+        let source = FakeSource()
+        let recording = RecordingState()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter(), recording: recording) { received.append($0.text) }
+
+        recording.isPaused = true
+        source.copy(plain("during pause"))
+        monitor.poll()
+        recording.isPaused = false
+        monitor.poll()
+        #expect(received.isEmpty)
+
+        source.copy(plain("after resume"))
+        monitor.poll()
+        #expect(received == ["after resume"])
+    }
+
+    @Test func pausingTakesEffectImmediatelyBetweenPolls() {
+        let source = FakeSource()
+        let recording = RecordingState()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter(), recording: recording) { received.append($0.text) }
+
+        source.copy(plain("copied just before pausing"))
+        recording.isPaused = true
+        monitor.poll()
+        #expect(received.isEmpty)
+    }
+
+    @Test func ownWritesWhilePausedStillAdvanceTheChangeCount() {
+        let source = FakeSource()
+        let recording = RecordingState()
+        var received: [String] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter(), recording: recording) { received.append($0.text) }
+
+        recording.isPaused = true
+        monitor.copyToPasteboard("pasted from panel")
+        recording.isPaused = false
+        monitor.poll()
+        #expect(received.isEmpty)
+    }
+}
+
+@MainActor
+@Suite struct RecordingStateTests {
+    private func defaults() -> UserDefaults {
+        let name = "pastu.tests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return d
+    }
+
+    @Test func startsRecording() {
+        #expect(RecordingState().isPaused == false)
+        #expect(RecordingState(defaults: defaults()).isPaused == false)
+    }
+
+    @Test func pausedFlagSurvivesRelaunch() {
+        let d = defaults()
+        RecordingState(defaults: d).isPaused = true
+        #expect(RecordingState(defaults: d).isPaused == true)
+        RecordingState(defaults: d).isPaused = false
+        #expect(RecordingState(defaults: d).isPaused == false)
+    }
+
+    @Test func togglesBetweenStates() {
+        let state = RecordingState()
+        state.toggle()
+        #expect(state.isPaused)
+        state.toggle()
+        #expect(!state.isPaused)
     }
 }

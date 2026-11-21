@@ -23,6 +23,7 @@ struct PanelView: View {
                 .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
                 .onKeyPress(.downArrow) { model.moveSelection(by: 1); return .handled }
                 .onKeyPress(.return) { onSubmit(); return .handled }
+                .onKeyPress(.tab) { model.cycleFilter(); return .handled }
                 .onKeyPress(characters: .decimalDigits, phases: .down) { press in
                     // ⌘1-9 pastes the nth row directly.
                     guard press.modifiers.contains(.command),
@@ -38,10 +39,12 @@ struct PanelView: View {
                     return .handled
                 }
 
+            FilterBar(selected: model.filter)
+
             Divider()
 
             if model.clips.isEmpty {
-                Text(model.query.isEmpty ? "Nothing copied yet" : "No matches")
+                Text(emptyMessage)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -60,6 +63,15 @@ struct PanelView: View {
         .onAppear { searchFocused = true }
     }
 
+    private var emptyMessage: String {
+        if !model.query.isEmpty { return "No matches" }
+        switch model.filter {
+        case .all: return "Nothing copied yet"
+        case .text: return "No text clips"
+        case .links: return "No links"
+        }
+    }
+
     private var list: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -75,6 +87,28 @@ struct PanelView: View {
                 if let id = model.selectedClip?.id { proxy.scrollTo(id) }
             }
         }
+    }
+}
+
+/// "All / Text / Links" chips above the list. Tab cycles through them; they are not clickable on purpose
+/// (the search field keeps keyboard focus).
+private struct FilterBar: View {
+    let selected: ClipFilter
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(ClipFilter.allCases, id: \.self) { filter in
+                Text(filter.title)
+                    .font(.caption.weight(filter == selected ? .semibold : .regular))
+                    .foregroundStyle(filter == selected ? Color.primary : Color.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(filter == selected ? Color.accentColor.opacity(0.35) : .clear))
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
     }
 }
 
@@ -202,6 +236,7 @@ private struct HintFooter: View {
             }
             Text("⌘1–9 Quick paste")
             Text("⌘P Pin")
+            Text("⇥ Filter")
             Text("↑↓ Select")
             Text("esc Close")
             Spacer()

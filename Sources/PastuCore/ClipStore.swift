@@ -10,16 +10,25 @@ public struct StoredClip: Equatable, Sendable {
     public let lastCopiedAt: Date
     public let copyCount: Int
     public let isPinned: Bool
+
+    public var kind: ClipKind { ClipKind.detect(text) }
 }
 
 /// How much history to keep. `nil` means "no limit" for that dimension.
 public struct RetentionPolicy: Equatable, Sendable {
     public var maxCount: Int?
     public var maxAge: TimeInterval?
+    /// Cap on the estimated database size (see `ClipStore.estimatedSizeInBytes()`). Default 200 MB.
+    public var maxTotalBytes: Int?
 
-    public init(maxCount: Int? = 5_000, maxAge: TimeInterval? = 90 * 24 * 3600) {
+    public init(
+        maxCount: Int? = 5_000,
+        maxAge: TimeInterval? = 90 * 24 * 3600,
+        maxTotalBytes: Int? = 200 * 1024 * 1024
+    ) {
         self.maxCount = maxCount
         self.maxAge = maxAge
+        self.maxTotalBytes = maxTotalBytes
     }
 }
 
@@ -45,6 +54,7 @@ public final class ClipStore {
             sqlite3_close(db)
             throw error
         }
+        try registerFunctions()
         try migrate()
     }
 
@@ -75,11 +85,24 @@ public final class ClipStore {
         return id
     }
 
-    public func recent(limit: Int = 50) throws -> [StoredClip] {
+    /// Pinned first, then newest. `kind` restricts the result to text or links; it applies before `limit`.
+    public func recent(limit: Int = 50, kind: ClipKind? = nil) throws -> [StoredClip] {
         try query("""
-            SELECT id, text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned
-            FROM clips ORDER BY pinned DESC, last_copied_at DESC, id DESC LIMIT ?1
+            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned
+            FROM clips c
+            WHERE \(Self.kindCondition(kind))
+            ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1
             """, limit: limit)
+    }
+
+    /// SQL for the kind filter. Uses `pastu_is_link`, which calls `ClipKind.detect`, so the filter
+    /// and the Swift-side `StoredClip.kind` can never disagree.
+    private static func kindCondition(_ kind: ClipKind?) -> String {
+        switch kind {
+        case nil: "1"
+        case .link?: "pastu_is_link(c.text) = 1"
+        case .text?: "pastu_is_link(c.text) = 0"
+        }
     }
 
     /// Substring search: every term must appear somewhere in the text (any position, any case,
@@ -87,14 +110,14 @@ public final class ClipStore {
     ///
     /// Terms of 3+ characters use the trigram index. Shorter terms cannot (a trigram needs 3 characters),
     /// so they are checked with `instr`, which is only case-insensitive for ASCII letters.
-    public func search(_ query: String, limit: Int = 50) throws -> [StoredClip] {
+    public func search(_ query: String, limit: Int = 50, kind: ClipKind? = nil) throws -> [StoredClip] {
         let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        if terms.isEmpty { return try recent(limit: limit) }
+        if terms.isEmpty { return try recent(limit: limit, kind: kind) }
 
         let indexed = terms.filter { $0.count >= 3 }
         let short = terms.filter { $0.count < 3 }
 
-        var conditions: [String] = []
+        var conditions: [String] = [Self.kindCondition(kind)]
         var binds: [String] = []
         let source: String
         if indexed.isEmpty {
@@ -153,12 +176,61 @@ public final class ClipStore {
                 guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
                 removed += Int(sqlite3_changes(db))
             }
+            if let cap = policy.maxTotalBytes {
+                removed += try pruneToSize(cap)
+            }
             try exec("COMMIT")
             return removed
         } catch {
             try? exec("ROLLBACK")
             throw error
         }
+    }
+
+    /// The text is stored once in the table and again, as overlapping 3-character pieces, in the trigram index.
+    /// Measured overhead is roughly 3.5x the text size on top of the text itself, hence 4.5x in total.
+    /// An estimate from the text length (not `page_count * page_size`) so it is deterministic and shrinks
+    /// immediately after deletes, without waiting for a VACUUM.
+    static let indexOverheadFactor = 4.5
+
+    /// Estimated on-disk size of the history: UTF-8 bytes of all clip text times `indexOverheadFactor`.
+    public func estimatedSizeInBytes() throws -> Int {
+        let stmt = try prepare("SELECT COALESCE(SUM(LENGTH(CAST(text AS BLOB))), 0) FROM clips")
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
+        return Int(Double(sqlite3_column_int64(stmt, 0)) * Self.indexOverheadFactor)
+    }
+
+    /// Deletes the oldest unpinned clips until the estimate is within `cap`. Runs inside `prune`'s transaction.
+    private func pruneToSize(_ cap: Int) throws -> Int {
+        var excess = try estimatedSizeInBytes() - cap
+        guard excess > 0 else { return 0 }
+        let select = try prepare("""
+            SELECT id, LENGTH(CAST(text AS BLOB)) FROM clips WHERE pinned = 0 ORDER BY last_copied_at ASC, id ASC
+            """)
+        defer { sqlite3_finalize(select) }
+        var ids: [Int64] = []
+        while excess > 0, sqlite3_step(select) == SQLITE_ROW {
+            ids.append(sqlite3_column_int64(select, 0))
+            excess -= Int((Double(sqlite3_column_int64(select, 1)) * Self.indexOverheadFactor).rounded(.up))
+        }
+        let delete = try prepare("DELETE FROM clips WHERE id = ?1")
+        defer { sqlite3_finalize(delete) }
+        for id in ids {
+            sqlite3_reset(delete)
+            sqlite3_bind_int64(delete, 1, id)
+            guard sqlite3_step(delete) == SQLITE_DONE else { throw lastError() }
+        }
+        return ids.count
+    }
+
+    /// Deletes the whole history, or everything except pinned clips. Returns how many clips were deleted.
+    @discardableResult
+    public func clear(keepPinned: Bool) throws -> Int {
+        let stmt = try prepare(keepPinned ? "DELETE FROM clips WHERE pinned = 0" : "DELETE FROM clips")
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw lastError() }
+        return Int(sqlite3_changes(db))
     }
 
     /// Pinned clips stay on top of the list and are never pruned. Pinning is not a copy: it changes nothing else.
@@ -208,6 +280,24 @@ public final class ClipStore {
     /// like `"`, `(` or `*` can never cause a syntax error. With the trigram index a phrase is a substring.
     static func ftsMatchExpression(for terms: [String]) -> String {
         terms.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: " ")
+    }
+
+    // MARK: SQL functions
+
+    /// `pastu_is_link(text)`: 1 when `ClipKind.detect(text)` is `.link`, else 0.
+    private func registerFunctions() throws {
+        let rc = sqlite3_create_function_v2(
+            db, "pastu_is_link", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, nil,
+            { context, argc, argv in
+                guard argc == 1, let argv, let raw = sqlite3_value_text(argv[0]) else {
+                    sqlite3_result_int(context, 0)
+                    return
+                }
+                sqlite3_result_int(context, ClipKind.detect(String(cString: raw)) == .link ? 1 : 0)
+            },
+            nil, nil, nil
+        )
+        guard rc == SQLITE_OK else { throw lastError() }
     }
 
     // MARK: Schema

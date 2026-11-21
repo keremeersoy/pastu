@@ -16,6 +16,15 @@ public final class ClipListModel {
         }
     }
 
+    /// Restricts the list to text or links. Changing it moves the selection back to the top.
+    public var filter = ClipFilter.all {
+        didSet {
+            guard filter != oldValue else { return }
+            selectedIndex = 0
+            reload()
+        }
+    }
+
     @ObservationIgnored private let store: ClipStore
     @ObservationIgnored private let limit: Int
 
@@ -32,6 +41,11 @@ public final class ClipListModel {
     /// Re-runs the current search (e.g. after a new copy) and keeps the selection in range.
     public func refresh() {
         reload()
+    }
+
+    /// All, then Text, then Links, then back to All.
+    public func cycleFilter() {
+        filter = filter.next
     }
 
     /// Jumps to a row (used by ⌘1-9). Returns false, leaving the selection alone, when the row does not exist.
@@ -57,7 +71,7 @@ public final class ClipListModel {
 
     private func reload() {
         // A failing query shows an empty list instead of crashing the panel.
-        clips = (try? store.search(query, limit: limit)) ?? []
+        clips = (try? store.search(query, limit: limit, kind: filter.kind)) ?? []
         selectedIndex = clips.isEmpty ? 0 : min(selectedIndex, clips.count - 1)
     }
 }
