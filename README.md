@@ -1,8 +1,16 @@
 # Pastu
 
-A fast, local-first, privacy-focused clipboard manager for macOS. Open source, free, no subscription.
+A fast, local-first, privacy-focused clipboard manager for macOS. Open source (MIT), free, no subscription,
+no network access.
 
-> **Status: early prototype.** It captures, searches and pastes text. There is no release yet.
+> **Status: early prototype (v0.1).** It captures text and pictures, searches them and pastes them back.
+> Builds are **not signed or notarized** by Apple yet, so macOS warns on first launch (see
+> [Installing](#installing-a-release)). Expect rough edges; bug reports are welcome.
+
+<!-- SCREENSHOT PLACEHOLDER: replace with a real screenshot or GIF of the panel (light and dark mode).
+     Automated window captures do not render the Liquid Glass shell, so none is included on purpose. -->
+> 📷 **Screenshot coming soon.** No screenshot yet: automated captures cannot show the real Liquid Glass panel,
+> and we would rather show nothing than something misleading.
 
 ## What works today
 
@@ -30,7 +38,11 @@ A fast, local-first, privacy-focused clipboard manager for macOS. Open source, f
 - Menu bar menu: **Pause recording** / **Resume recording** (the choice survives a relaunch; while paused Pastu does not
   even look at the pasteboard) and **Clear history…** (asks first; pinned clips are kept).
 - History limits, whichever is hit first: 5,000 unpinned clips, 90 days, or about 200 MB in total (an estimate: the text
-  size times 4.5 for the search index). Pinned clips are never deleted by these limits. Text over 1 MB and pictures over 10 MB are skipped.
+  size times 4.5 for the search index, plus picture sizes). Pinned clips are never deleted by these limits.
+  Text over 1 MB and pictures over 10 MB are skipped.
+
+Not there yet: a settings window (custom shortcut, launch at login, limits), file and color clips, rich-text paste,
+paste queue, snippets, OCR, sync. See the [roadmap](#roadmap).
 
 ## Privacy and threat model
 
@@ -48,22 +60,38 @@ A fast, local-first, privacy-focused clipboard manager for macOS. Open source, f
 - Pastu needs the Accessibility permission only to send ⌘V for you. It never reads other apps' windows or keystrokes.
 - Found a security problem? See [SECURITY.md](SECURITY.md).
 
+## Installing a release
+
+Requires **macOS 15 (Sequoia) or later**. The prebuilt zip contains an **Apple Silicon (arm64)** build; on an
+Intel Mac, build from source.
+
+1. Download `Pastu-<version>.zip` from [Releases](https://github.com/keremeersoy/pastu/releases) and unzip it.
+   Each release lists the zip's SHA-256 checksum; you can check it with `shasum -a 256 Pastu-<version>.zip`.
+2. Move `Pastu.app` to `/Applications` and open it.
+3. macOS says it cannot verify the developer. **Why:** Pastu is signed ad hoc, not with an Apple Developer ID,
+   and is not notarized (the project has no paid Apple Developer account yet). To allow it **for this app only**:
+   open **System Settings → Privacy & Security**, scroll down to the message about Pastu and click
+   **Open Anyway**, then confirm. (On macOS 15 and later, Control-click → Open no longer skips this step.)
+   Do not turn off Gatekeeper for your whole Mac.
+4. Grant the **Accessibility** permission when asked (System Settings → Privacy & Security → Accessibility).
+   Pastu uses it only to press ⌘V for you. Without it, the chosen clip is still put on the clipboard and you
+   can press ⌘V yourself; the panel footer says when this is the case.
+
+Because the signature is ad hoc, macOS may ask for the Accessibility permission again after you update Pastu.
+If macOS 15.4+ is set to deny Pastu clipboard access, the menu bar menu shows a warning.
+
 ## Build from source
 
-Requires macOS 15+ to run, and Xcode 26+ (Swift 6, macOS 26 SDK) to build: the panel uses Liquid Glass on
+Requires macOS 15+ to run, and **Xcode 26+** (Swift 6, macOS 26 SDK) to build: the panel uses Liquid Glass on
 macOS 26 and a material on macOS 15. Some tests open real windows, so run them in a logged-in GUI session.
 
 ```bash
 swift test                # run the tests
-./scripts/build-app.sh    # builds build/Pastu.app (ad-hoc signed)
+./scripts/build-app.sh    # builds build/Pastu.app (see signing below)
 open build/Pastu.app
 ```
 
-Pasting into other apps needs the **Accessibility** permission
-(System Settings → Privacy & Security → Accessibility). Without it, the selected text is still
-placed on your clipboard and you can press ⌘V yourself; the panel footer says when this is the case.
-Pastu asks for the permission once at launch. If macOS 15.4+ is set to deny Pastu clipboard access, the menu
-shows a warning.
+`VERSION=0.1.0 ./scripts/build-app.sh` sets the version in the built app only (the release workflow uses this).
 
 ### Keeping the permission across rebuilds
 
@@ -83,25 +111,47 @@ not a secret: the keychain holds only a local certificate that is valid for sign
 exists so the scripts can unlock it without a prompt. Do not distribute builds signed with it; other Macs
 will show the Gatekeeper warning for them. To undo it: `security delete-keychain ~/Library/Keychains/pastu-dev.keychain-db`.
 
+## Known limitations and unverified areas
+
+Being honest about what has and has not been checked:
+
+- **Not signed or notarized**: Gatekeeper warning on first launch; Accessibility may need re-granting after updates.
+- **History is unencrypted**, including pictures and screenshots (see the threat model above).
+- **Looks**: the Liquid Glass panel (macOS 26) and Dark mode have not been visually verified, and there is no real
+  screenshot yet.
+- **Not tested by hand yet**: pasting a picture into another app with ⌘V, clicking the menu bar items (Pause, the
+  Clear history alert, the Ignored apps submenu), ⌘⌫ and ⌘I on a real keyboard, multiple displays, full-screen
+  apps and Spaces.
+- **macOS 15.4+ clipboard privacy prompt**: how macOS asks about Pastu's clipboard access has not been observed.
+- **Build**: only built against the macOS 27.2 SDK so far; building with exactly the macOS 26 SDK has not been tried.
+- **Performance**: panel-open latency has not been measured.
+- The source app of a clip is a best guess (the frontmost app when the copy was noticed).
+- Search terms shorter than 3 characters are case-insensitive for ASCII letters only.
+- The app icon is a temporary one drawn in code (`scripts/make-icon.swift`); a designed icon is welcome.
+
 ## Project layout
 
 ```
 Sources/PastuCore/   UI-independent logic: clipboard monitor, privacy filter, SQLite store, list model, clip kinds
-Sources/Pastu/       Menu bar app shell: NSPanel, SwiftUI view, global hotkey, paste sender
+Sources/Pastu/       Menu bar app shell: app delegate, status menu, paste coordinator, NSPanel, global hotkey
+Sources/Pastu/Panel/ SwiftUI views of the panel (list rows, preview, filter bar, footer)
 Tests/               Swift Testing tests (PastuCoreTests: logic; PastuTests: panel/key handling with real windows)
-scripts/             build-app.sh, setup-dev-signing.sh
-docs/                Market research, product roadmap, naming (Turkish)
+Resources/           Info.plist and the app icon
+scripts/             build-app.sh, setup-dev-signing.sh, make-icon.swift
+docs/                Market research, product roadmap, naming (Turkish; see docs/README.md)
 ```
 
 ## Roadmap
 
-See [docs/02-urun-ve-yol-haritasi.md](docs/02-urun-ve-yol-haritasi.md) (in Turkish). Next up: file types,
-a settings window (custom shortcut, ignored apps, launch at login), then paste queue, snippets and OCR.
+See [docs/02-urun-ve-yol-haritasi.md](docs/02-urun-ve-yol-haritasi.md) (in Turkish). Next up: a settings window
+(custom shortcut, ignored apps, launch at login), file and color clips, then paste queue, snippets and OCR.
+Issues labelled [`good first issue`](https://github.com/keremeersoy/pastu/labels/good%20first%20issue) are a good
+place to start.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE), copyright Pastu contributors.

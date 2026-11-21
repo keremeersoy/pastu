@@ -28,6 +28,14 @@ will follow [Semantic Versioning](https://semver.org/) once it has a first relea
 - Database migrations (`PRAGMA user_version`) from older builds (pins, trigram index).
 - MIT License.
 - GitHub Actions CI, CONTRIBUTING, SECURITY and Code of Conduct.
+- Temporary app icon, generated in code (`scripts/make-icon.swift`).
+- `VERSION=x.y.z ./scripts/build-app.sh` sets the version of the built app.
+
+### Changed
+- Bundle identifier is `io.github.keremeersoy.Pastu`. A build from before this change is a different app to macOS:
+  grant the Accessibility permission again after updating.
+- Code reorganised for contributors (no behavior change): `ClipStore` split into extensions, panel views in
+  `Sources/Pastu/Panel`, menu and paste logic moved out of `main.swift`, settings keys in one place.
 
 ### Fixed
 - Copies made while a menu bar menu is open are no longer missed (pasteboard timer runs in common run loop modes).
