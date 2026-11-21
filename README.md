@@ -24,8 +24,10 @@ back into the app you were using.
 **Homebrew** (one line):
 
 ```bash
-brew install --cask keremeersoy/pastu/pastu
+brew tap keremeersoy/pastu && brew trust keremeersoy/pastu && brew install --cask pastu
 ```
+
+Homebrew asks you to trust taps that are not part of Homebrew itself; `brew trust` does that for this one tap.
 
 **Or download** [Pastu-0.1.1.zip](https://github.com/keremeersoy/pastu/releases/download/v0.1.1/Pastu-0.1.1.zip),
 unzip it and move `Pastu.app` to Applications.
