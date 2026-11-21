@@ -45,4 +45,17 @@ public enum ClipFormatting {
         if text.last?.isNewline == true, lines > 1 { lines -= 1 }
         return "\(characters) character\(characters == 1 ? "" : "s") · \(lines) line\(lines == 1 ? "" : "s")"
     }
+
+    /// "512 B", "1.5 KB", "48 KB", "2.3 MB": one decimal below 10, none above. Locale-independent.
+    public static func fileSize(_ bytes: Int) -> String {
+        let kilobyte = 1024.0, megabyte = 1024.0 * 1024.0
+        let size = Double(max(bytes, 0))
+        if size < kilobyte { return "\(Int(size)) B" }
+        if size < megabyte {
+            let value = size / kilobyte
+            return String(format: value < 10 ? "%.1f KB" : "%.0f KB", value)
+        }
+        let value = size / megabyte
+        return String(format: value < 10 ? "%.1f MB" : "%.0f MB", value)
+    }
 }

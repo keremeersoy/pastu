@@ -75,3 +75,31 @@ import Testing
         #expect(ClipFormatting.stats("one\ntwo\n") == "8 characters · 2 lines")
     }
 }
+
+@Suite struct FileSizeFormattingTests {
+    private let kb = 1024
+    private let mb = 1024 * 1024
+
+    @Test func smallSizesAreShownInBytes() {
+        #expect(ClipFormatting.fileSize(0) == "0 B")
+        #expect(ClipFormatting.fileSize(512) == "512 B")
+        #expect(ClipFormatting.fileSize(1023) == "1023 B")
+    }
+
+    @Test func kilobytesHaveOneDecimalBelowTenAndNoneAbove() {
+        #expect(ClipFormatting.fileSize(kb) == "1.0 KB")
+        #expect(ClipFormatting.fileSize(kb + kb / 2) == "1.5 KB")
+        #expect(ClipFormatting.fileSize(10 * kb) == "10 KB")
+        #expect(ClipFormatting.fileSize(48 * kb) == "48 KB")
+    }
+
+    @Test func megabytesFollowTheSameRule() {
+        #expect(ClipFormatting.fileSize(mb) == "1.0 MB")
+        #expect(ClipFormatting.fileSize(2 * mb + 300 * kb) == "2.3 MB")
+        #expect(ClipFormatting.fileSize(10 * mb) == "10 MB")
+    }
+
+    @Test func justBelowAMegabyteStaysInKilobytes() {
+        #expect(ClipFormatting.fileSize(mb - 1) == "1024 KB")
+    }
+}

@@ -3,30 +3,6 @@ import Foundation
 import Testing
 @testable import PastuCore
 
-private let pngSignature = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
-
-private func bitmap(_ width: Int, _ height: Int) -> NSBitmapImageRep {
-    let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
-        hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-    )!
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-    NSColor.red.setFill()
-    NSRect(x: 0, y: 0, width: width, height: height).fill()
-    NSGraphicsContext.restoreGraphicsState()
-    return rep
-}
-
-private func pngData(_ width: Int = 6, _ height: Int = 4) -> Data { bitmap(width, height).representation(using: .png, properties: [:])! }
-private func tiffData(_ width: Int = 6, _ height: Int = 4) -> Data { bitmap(width, height).representation(using: .tiff, properties: [:])! }
-private func jpegData(_ width: Int = 6, _ height: Int = 4) -> Data { bitmap(width, height).representation(using: .jpeg, properties: [:])! }
-
-private func size(of png: Data) -> NSSize? {
-    guard let rep = NSBitmapImageRep(data: png) else { return nil }
-    return NSSize(width: rep.pixelsWide, height: rep.pixelsHigh)
-}
-
 @Suite struct PNGConverterTests {
     @Test func pngInputIsReturnedUnchanged() {
         let original = pngData()
@@ -48,6 +24,40 @@ private func size(of png: Data) -> NSSize? {
     @Test func garbageAndEmptyDataAreRejected() {
         #expect(PNGConverter.png(from: Data([1, 2, 3, 4])) == nil)
         #expect(PNGConverter.png(from: Data()) == nil)
+    }
+}
+
+@Suite struct PNGDimensionsTests {
+    @Test func readsTheSizeOfARealPNG() {
+        let size = PNGConverter.dimensions(of: pngData(8, 5))
+        #expect(size?.width == 8)
+        #expect(size?.height == 5)
+    }
+
+    @Test func readsLargeDimensionsFromTheHeaderAlone() {
+        // A header claiming 4096 x 3000 followed by nothing else: the size must come from IHDR, not from decoding.
+        var header = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52])
+        header.append(contentsOf: [0, 0, 0x10, 0x00, 0, 0, 0x0B, 0xB8])
+        let size = PNGConverter.dimensions(of: header)
+        #expect(size?.width == 4096)
+        #expect(size?.height == 3000)
+    }
+
+    @Test func rejectsEverythingThatIsNotAWellFormedPNGHeader() {
+        #expect(PNGConverter.dimensions(of: Data()) == nil)
+        #expect(PNGConverter.dimensions(of: Data([1, 2, 3, 4])) == nil)
+        #expect(PNGConverter.dimensions(of: jpegData()) == nil)
+        #expect(PNGConverter.dimensions(of: tiffData()) == nil)
+        #expect(PNGConverter.dimensions(of: pngData().prefix(20)) == nil)          // truncated header
+        var wrongChunk = Data(pngData().prefix(24))
+        wrongChunk.replaceSubrange(12..<16, with: Data([0x58, 0x58, 0x58, 0x58]))   // "XXXX" instead of "IHDR"
+        #expect(PNGConverter.dimensions(of: wrongChunk) == nil)
+        var wrongSignature = Data(pngData().prefix(24))
+        wrongSignature[1] = 0x51                                                    // "Q" instead of "P", the rest is valid
+        #expect(PNGConverter.dimensions(of: wrongSignature) == nil)
+        var zeroWidth = Data(pngData().prefix(24))
+        zeroWidth.replaceSubrange(16..<20, with: Data([0, 0, 0, 0]))
+        #expect(PNGConverter.dimensions(of: zeroWidth) == nil)
     }
 }
 
