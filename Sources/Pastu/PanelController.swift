@@ -53,14 +53,20 @@ final class PanelController: NSObject, NSWindowDelegate {
         super.init()
         panel.delegate = self
         panel.onCancel = { [weak self] in
-            // An open shortcuts overlay is dismissed first; the panel itself closes on the next Esc.
-            if model.showsShortcuts { model.showsShortcuts = false } else { self?.hide() }
+            // An open shortcuts overlay is dismissed first, then a non-empty search is cleared; only then it closes.
+            if model.showsShortcuts {
+                model.showsShortcuts = false
+            } else if model.escape() == .close {
+                self?.hide()
+            }
         }
         panel.onDeleteSelected = { [weak self] in
             guard let self, let id = model.selectedClip?.id else { return }
             model.deleteSelected()
             PanelCaches.forget(id)
         }
+        panel.onMoveToStart = { model.moveToStart() }
+        panel.onMoveToEnd = { model.moveToEnd() }
         panel.onContextClickEnded = { [weak self] chose in self?.contextClickEnded(choseMenuItem: chose) }
     }
 
@@ -69,8 +75,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        model.query = ""
-        model.refresh()
+        model.resetForShow()
         PanelCaches.retainOnly(Set(model.clips.map(\.id)))
         // A fresh view each time resets focus and scroll position.
         panel.contentView = NSHostingView(rootView: PanelView(

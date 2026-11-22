@@ -58,6 +58,7 @@ extension ShellTests {
         panel.makeKeyAndOrderFront(nil)
         await pump()
         defer { panel.orderOut(nil) }
+        try #require(await searchFieldHasFocus(panel))
 
         // Rows are newest first: ⌘1 = "newest", ⌘2 = "middle".
         NSApp.sendEvent(keyEvent("2", keyCode: 19, modifiers: .command, window: panel))
@@ -80,6 +81,7 @@ extension ShellTests {
         panel.makeKeyAndOrderFront(nil)
         await pump()
         defer { panel.orderOut(nil) }
+        try #require(await searchFieldHasFocus(panel))
 
         NSApp.sendEvent(keyEvent("p", keyCode: 35, modifiers: .command, window: panel))
         await pump(0.2)
@@ -102,6 +104,7 @@ extension ShellTests {
         panel.makeKeyAndOrderFront(nil)
         await pump()
         defer { panel.orderOut(nil) }
+        try #require(await searchFieldHasFocus(panel))
 
         NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
         await pump(0.2)
@@ -154,10 +157,10 @@ extension ShellTests {
             try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
         }
         let model = ClipListModel(store: store)
-        model.moveSelection(by: 1) // on "middle"
 
         let controller = PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in })
         controller.show()
+        model.moveSelection(by: 1) // on "middle"; after show, which resets the selection to the top
         await pump()
         defer { controller.hide() }
 
@@ -717,6 +720,96 @@ extension ShellTests {
         #expect(controller.isVisible)
         #expect(panel.isKeyWindow)
     }
-}
-}
 
+    // MARK: Keyboard navigation and paging
+
+    private func controllerWithClips(_ count: Int) throws -> (PanelController, ClipListModel) {
+        let store = try ClipStore()
+        for i in 0..<count {
+            try store.insert(CapturedClip(text: "clip \(i)", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        let model = ClipListModel(store: store)
+        return (PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in }), model)
+    }
+
+    private func press(_ character: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags = [], on panel: ClipPanel) async {
+        NSApp.sendEvent(keyEvent(character, keyCode: keyCode, modifiers: modifiers, window: panel))
+        await pump(0.2)
+    }
+
+    @Test func escClearsQueryBeforeClosing() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, model) = try controllerWithClips(3)
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        model.query = "clip"
+        await pump(0.2)
+        await press("\u{1B}", keyCode: 53, on: controller.panel)
+        #expect(controller.isVisible)
+        #expect(model.query == "")
+        await press("\u{1B}", keyCode: 53, on: controller.panel)
+        #expect(!controller.isVisible)
+    }
+
+    @Test func commandDownGoesToLastLoadedRowAndLoadsMore() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, model) = try controllerWithClips(250)
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        await press("\u{F701}", keyCode: 125, modifiers: .command, on: controller.panel)
+        #expect(model.selectedIndex == 99)
+        #expect(model.clips.count == 200)
+        await press("\u{F700}", keyCode: 126, modifiers: .command, on: controller.panel)
+        #expect(model.selectedIndex == 0)
+    }
+
+    @Test func endAndHomeKeys() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, model) = try controllerWithClips(30)
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        await press("\u{F72B}", keyCode: 119, on: controller.panel)
+        #expect(model.selectedIndex == 29)
+        await press("\u{F729}", keyCode: 115, on: controller.panel)
+        #expect(model.selectedIndex == 0)
+    }
+
+    @Test func pageDownMovesByAPage() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, model) = try controllerWithClips(60)
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        await press("\u{F72D}", keyCode: 121, on: controller.panel)
+        let page = model.selectedIndex
+        #expect(page > 1)
+        await press("\u{F72D}", keyCode: 121, on: controller.panel)
+        #expect(model.selectedIndex == page * 2)
+        await press("\u{F72C}", keyCode: 116, on: controller.panel)
+        #expect(model.selectedIndex == page)
+    }
+
+    @Test func showResetsFilterToAll() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, model) = try controllerWithClips(3)
+        model.filter = .links
+        controller.hide()
+        controller.show()
+        defer { controller.hide() }
+        #expect(model.filter == .all)
+        #expect(model.selectedIndex == 0)
+    }
+}
+}

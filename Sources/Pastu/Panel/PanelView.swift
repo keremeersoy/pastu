@@ -10,6 +10,13 @@ enum PanelMetrics {
     static let contentInset: CGFloat = 8
     /// Inner shapes are concentric with the shell.
     static var innerRadius: CGFloat { cornerRadius - contentInset }
+    /// Page Up / Page Down step: roughly the rows that fit the list (panel minus header and footer, at a typical
+    /// row height). Rows differ a little in height, so this is an estimate; it only has to feel like a page.
+    static var rowsPerPage: Int {
+        let listHeight = size.height - 52 - 32
+        let rows = Int(listHeight / 42)
+        return rows > 0 ? rows : 8
+    }
 }
 
 struct PanelView: View {
@@ -41,8 +48,18 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             SearchHeader(query: Bindable(model).query, filter: Bindable(model).filter, focused: $searchFocused)
-                .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
-                .onKeyPress(.downArrow) { model.moveSelection(by: 1); return .handled }
+                .onKeyPress(keys: [.upArrow]) { press in
+                    if press.modifiers.contains(.command) { model.moveToStart() } else { model.moveSelection(by: -1) }
+                    return .handled
+                }
+                .onKeyPress(keys: [.downArrow]) { press in
+                    if press.modifiers.contains(.command) { model.moveToEnd() } else { model.moveSelection(by: 1) }
+                    return .handled
+                }
+                .onKeyPress(.home) { model.moveToStart(); return .handled }
+                .onKeyPress(.end) { model.moveToEnd(); return .handled }
+                .onKeyPress(.pageUp) { model.movePage(-1, rowsPerPage: PanelMetrics.rowsPerPage); return .handled }
+                .onKeyPress(.pageDown) { model.movePage(1, rowsPerPage: PanelMetrics.rowsPerPage); return .handled }
                 .onKeyPress(.return) { onSubmit(); return .handled }
                 // AppKit reports Shift-Tab as the back-tab character (U+0019), not as Tab plus Shift.
                 .onKeyPress(keys: [.tab, KeyEquivalent("\u{19}")]) { press in
@@ -163,6 +180,10 @@ struct PanelView: View {
                             .onTapGesture { act(on: clip) {} }
                             .simultaneousGesture(TapGesture(count: 2).onEnded { act(on: clip, onSubmit) })
                             .contextMenu { rowMenu(for: clip) }
+                            // Reaching the last row by scrolling loads the next page. `loadMore` is a no-op once the
+                            // history is exhausted and appends synchronously, so it cannot loop: the appended rows
+                            // push this row off the end and only the new last row triggers again.
+                            .onAppear { if clip.id == model.clips.last?.id { model.loadMore() } }
                     }
                 }
                 .padding(PanelMetrics.contentInset)

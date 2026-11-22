@@ -13,7 +13,7 @@ struct ShortcutsOverlay: View {
         ("↑ ↓", "Select"),
         ("⌘↑ ⌘↓", "First / last"),
         ("Page Up / Down", "Page"),
-        ("esc", "Clear search / close"),
+        ("Esc", "Clear search / close"),
     ]
 
     var body: some View {

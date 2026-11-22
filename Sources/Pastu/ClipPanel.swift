@@ -7,6 +7,11 @@ final class ClipPanel: NSPanel {
     /// ⌘⌫. Handled here because the search field's text editor consumes Backspace before SwiftUI sees it.
     var onDeleteSelected: (() -> Void)?
 
+    /// ⌘↑ and ⌘↓. Handled here because the search field's text editor moves its caret to the start or end of the
+    /// text before SwiftUI sees these keys.
+    var onMoveToStart: (() -> Void)?
+    var onMoveToEnd: (() -> Void)?
+
     init(size: NSSize) {
         super.init(
             contentRect: NSRect(origin: .zero, size: size),
@@ -31,6 +36,11 @@ final class ClipPanel: NSPanel {
            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
             onDeleteSelected?()
             return true
+        }
+        let upArrowKeyCode: UInt16 = 126, downArrowKeyCode: UInt16 = 125
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.numericPad, .function]) == .command {
+            if event.keyCode == upArrowKeyCode { onMoveToStart?(); return true }
+            if event.keyCode == downArrowKeyCode { onMoveToEnd?(); return true }
         }
         return super.performKeyEquivalent(with: event)
     }
