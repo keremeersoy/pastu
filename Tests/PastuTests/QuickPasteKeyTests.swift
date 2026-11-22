@@ -249,6 +249,48 @@ extension ShellTests {
         #expect(model.filter == .text)
     }
 
+    /// Giving a text field focus selects all of its text. The repair must not: the next keystroke would replace the
+    /// query the user already typed.
+    @Test func repairingFocusKeepsTheQueryAndPutsTheCaretAtItsEnd() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, model) = try controllerWithClips(3)
+        controller.show()
+        defer { controller.hide() }
+        let panel = controller.panel
+        model.query = "cli"
+        await pump()
+        panel.makeFirstResponder(nil)
+        await pump(0.1)
+        try #require(panel.firstResponder === panel)
+
+        panel.becomeKey()
+        await pump(0.1)
+        let editor = try #require(panel.firstResponder as? NSTextView)
+        #expect(editor.selectedRange() == NSRange(location: 3, length: 0))
+        editor.insertText("p", replacementRange: editor.selectedRange())
+        await pump(0.1)
+        #expect(model.query == "clip")
+    }
+
+    /// The repair runs one run-loop turn later; by then the panel may have been closed again.
+    @Test func aPanelHiddenInTheMeantimeIsLeftAlone() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, _) = try controllerWithClips(3)
+        controller.show()
+        await pump()
+        let panel = controller.panel
+        panel.makeFirstResponder(nil)
+        await pump(0.1)
+        try #require(panel.firstResponder === panel)
+
+        panel.becomeKey()
+        controller.hide()
+        await pump(0.1)
+        #expect(panel.firstResponder === panel)
+    }
+
     /// Only a missing focus is repaired: focus another view has is left alone.
     @Test func becomingKeyDoesNotMoveExistingFocus() async throws {
         let panel = ClipPanel(size: NSSize(width: 200, height: 100))
@@ -257,12 +299,16 @@ extension ShellTests {
         content.addSubview(first)
         content.addSubview(second)
         panel.contentView = content
+        // On screen: the repair ignores a hidden panel, so the test would prove nothing.
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil) }
         panel.makeFirstResponder(second)
-        let focused = panel.firstResponder
-        try #require(focused !== panel)
+        // Both fields share the window's one field editor, so ask which field it is editing for.
+        func focusedField() -> AnyObject? { (panel.firstResponder as? NSTextView)?.delegate }
+        try #require(focusedField() === second)
         panel.becomeKey()
         await pump(0.1)
-        #expect(panel.firstResponder === focused)
+        #expect(focusedField() === second)
     }
 
     // MARK: Shortcuts overlay

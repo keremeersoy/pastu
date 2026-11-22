@@ -30,9 +30,9 @@ final class ClipPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
 
-    /// SwiftUI focuses the search field when the panel's view appears, but rarely that request does nothing and the
-    /// key panel is left with no focused view: typing would go nowhere. Checked one run-loop turn after becoming key,
-    /// because SwiftUI applies its own request in between.
+    /// Mitigation; the cause is not known. SwiftUI focuses the search field when the panel's view appears, but rarely
+    /// the key panel was seen with no focused view, so typing would go nowhere. Checked one run-loop turn after
+    /// becoming key, to give SwiftUI's own focus request a chance first.
     override func becomeKey() {
         super.becomeKey()
         DispatchQueue.main.async { [weak self] in self?.focusSearchFieldIfNothingIsFocused() }
@@ -41,8 +41,13 @@ final class ClipPanel: NSPanel {
     /// Touches only a panel without any focused view (the window is its own first responder), so it never takes
     /// focus from another view, and never key status or activation from another window.
     private func focusSearchFieldIfNothingIsFocused() {
-        guard firstResponder === self, let contentView, let field = Self.editableTextField(in: contentView) else { return }
+        guard isVisible, firstResponder === self,
+              let contentView, let field = Self.editableTextField(in: contentView) else { return }
         makeFirstResponder(field)
+        // Focusing a field selects all of its text, so the next keystroke would replace a query already typed.
+        if let editor = field.currentEditor() {
+            editor.selectedRange = NSRange(location: (editor.string as NSString).length, length: 0)
+        }
     }
 
     /// The search field is the panel's only editable text field.
