@@ -25,10 +25,30 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var storageError: StorageProblem?
     var onShowPanel: () -> Void = {}
 
+    /// How the alert and the About window take focus and give it back; replaceable for tests.
+    @MainActor
+    struct Focus {
+        var frontmostApp: @MainActor () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }
+        var activatePastu: @MainActor () -> Void = { NSApp.activate() }
+        var isPastuActive: @MainActor () -> Bool = { NSApp.isActive }
+        var reactivate: @MainActor (NSRunningApplication) -> Void = { app in
+            // Activation is cooperative since macOS 14: the active app has to yield to the one it hands over to.
+            NSApp.yieldActivation(to: app)
+            app.activate(from: .current, options: [])
+        }
+    }
+
+    var focus = Focus()
+    /// Runs the Clear History alert; replaceable so tests can answer it.
+    var runAlert: (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }
+    /// Shows the About window and returns it, or nil when it was open already; replaceable for tests.
+    var showAboutPanel: @MainActor () -> NSWindow? = StatusMenuController.orderFrontAboutPanel
+
     private let recording: RecordingState
     private let ignoredApps: IgnoredApps
     private let systemPasteboard: SystemPasteboard
 
+    private var appBeforeAbout: NSRunningApplication?
     private var statusItem: NSStatusItem?
     private var accessWarningItem: NSMenuItem?
     private var storageWarningItem: NSMenuItem?
@@ -156,17 +176,19 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         statusItem?.button?.appearsDisabled = recording.isPaused
     }
 
-    @objc private func clearHistory() {
+    @objc func clearHistory() {
         guard let store else { return }
         // An accessory app is not frontmost; without this the alert can open behind other windows.
-        NSApp.activate()
+        let previous = activatePastu()
         let alert = NSAlert()
         alert.messageText = "Clear clipboard history?"
         alert.informativeText = "All clips except pinned ones will be deleted. This cannot be undone."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Clear History")
         alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let answer = runAlert(alert)
+        giveFocusBack(to: previous)
+        guard answer == .alertFirstButtonReturn else { return }
         do {
             try store.clear(keepPinned: true)
             storageError = nil
@@ -178,9 +200,44 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         model?.refresh()
     }
 
-    @objc private func showAbout() {
-        NSApp.activate()
+    @objc func showAbout() {
+        let previous = activatePastu()
+        // Nil when it is open already: the app to go back to was remembered the first time.
+        guard let window = showAboutPanel() else { return }
+        appBeforeAbout = previous
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(aboutWillClose(_:)), name: NSWindow.willCloseNotification, object: window
+        )
+    }
+
+    @objc private func aboutWillClose(_ notification: Notification) {
+        NotificationCenter.default.removeObserver(
+            self, name: NSWindow.willCloseNotification, object: notification.object
+        )
+        giveFocusBack(to: appBeforeAbout)
+        appBeforeAbout = nil
+    }
+
+    /// Brings Pastu to the front and returns the app that was there, for `giveFocusBack`.
+    private func activatePastu() -> NSRunningApplication? {
+        let previous = focus.frontmostApp()
+        focus.activatePastu()
+        return previous
+    }
+
+    /// An accessory app stays frontmost after its alert or window closes, and the panel does not activate anything:
+    /// without this, the next ⌘⇧V and Return would send ⌘V to Pastu itself and the paste would be lost. Does nothing
+    /// when the user already moved to another app.
+    private func giveFocusBack(to app: NSRunningApplication?) {
+        guard let app, app != .current, focus.isPastuActive() else { return }
+        focus.reactivate(app)
+    }
+
+    /// The standard panel's window has no public accessor: it is the one that became visible.
+    private static func orderFrontAboutPanel() -> NSWindow? {
+        let open = NSApp.windows.filter(\.isVisible)
         NSApp.orderFrontStandardAboutPanel(nil)
+        return NSApp.windows.first { $0.isVisible && !open.contains($0) }
     }
 
     private static var warningImage: NSImage? {

@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import PastuCore
 
 /// Pastes a clip chosen in the panel: puts it on the pasteboard, then sends ⌘V to the app the user came from.
@@ -12,15 +12,26 @@ final class PasteCoordinator {
     private var didPromptForAccessibility = false
     /// Sends ⌘V to the frontmost app; replaceable so tests can check that "Copy" never pastes.
     private let sendPaste: () -> Void
+    private let isTrusted: () -> Bool
+    private let isPastuActive: () -> Bool
+    private let hidePastu: () -> Void
 
-    init(sendPaste: @escaping () -> Void = PasteSender.sendCommandV) {
+    init(
+        sendPaste: @escaping () -> Void = PasteSender.sendCommandV,
+        isTrusted: @escaping () -> Bool = { PasteSender.isTrusted },
+        isPastuActive: @escaping () -> Bool = { NSApp.isActive },
+        hidePastu: @escaping () -> Void = { NSApp.hide(nil) }
+    ) {
         self.sendPaste = sendPaste
+        self.isTrusted = isTrusted
+        self.isPastuActive = isPastuActive
+        self.hidePastu = hidePastu
     }
 
     /// Shows the system Accessibility prompt if Pastu is not trusted yet and has not asked during this launch.
     /// The system dialog has a button that opens the right Settings pane.
     func requestAccessibilityIfNeeded() {
-        guard !PasteSender.isTrusted, !didPromptForAccessibility else { return }
+        guard !isTrusted(), !didPromptForAccessibility else { return }
         didPromptForAccessibility = true
         PasteSender.requestTrust()
     }
@@ -40,11 +51,14 @@ final class PasteCoordinator {
     func paste(_ clip: StoredClip) {
         guard copy(clip) else { return }
 
-        guard PasteSender.isTrusted else {
+        guard isTrusted() else {
             // The clip is already on the clipboard, so a manual ⌘V still works.
             requestAccessibilityIfNeeded()
             return
         }
+        // The panel never activates Pastu, but its alert or About window may have left it active, and then ⌘V would go
+        // to Pastu. Hiding hands activation to the app behind it.
+        if isPastuActive() { hidePastu() }
         Task { @MainActor in
             // Give the panel a moment to disappear so the key event reaches the previous app.
             try? await Task.sleep(for: .milliseconds(80))

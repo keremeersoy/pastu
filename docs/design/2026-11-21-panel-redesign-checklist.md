@@ -40,6 +40,7 @@ Use a build made with `scripts/build-app.sh` and sample clips only.
 - [ ] Items read: Show Pastu, Pause Recording, Clear History…, Ignored Apps, About Pastu, Quit Pastu.
 - [ ] Show Pastu displays ⌘⇧V; Pause Recording gets a checkmark while paused and the icon description says paused.
 - [ ] Clear History… alert opens in front; About Pastu shows the standard panel with the right version.
+- [ ] Clear History / About, then ⌘⇧V + Return pastes into the previous app.
 
 ## Performance
 - [ ] Panel open latency with several screenshot clips in the history feels as fast as 0.1.
