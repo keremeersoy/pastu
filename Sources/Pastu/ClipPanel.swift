@@ -35,8 +35,9 @@ final class ClipPanel: NSPanel {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// Called after a right click (or ⌃-click) was handled, with its context menu closed again.
-    var onContextClickEnded: (() -> Void)?
+    /// Called after a right click (or ⌃-click) was handled, with its context menu closed again. The argument says
+    /// whether a menu item was chosen (rather than the menu being dismissed).
+    var onContextClickEnded: ((_ choseMenuItem: Bool) -> Void)?
     /// True while a right click is being handled. Its context menu runs its tracking loop synchronously inside
     /// `sendEvent`, so this spans the whole time the menu is open.
     private(set) var isHandlingContextClick = false
@@ -49,11 +50,19 @@ final class ClipPanel: NSPanel {
     }
 
     /// Runs `body` as a context click: losing key status inside it is the menu's doing, not the user leaving.
+    /// AppKit sends a chosen item's action before the menu call returns, so it is seen here.
     func handlingContextClick(_ body: () -> Void) {
+        var choseMenuItem = false
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSMenu.didSendActionNotification, object: nil, queue: nil
+        ) { _ in
+            MainActor.assumeIsolated { choseMenuItem = true }
+        }
         isHandlingContextClick = true
         body()
         isHandlingContextClick = false
-        onContextClickEnded?()
+        NotificationCenter.default.removeObserver(observer)
+        onContextClickEnded?(choseMenuItem)
     }
 
     /// Esc.

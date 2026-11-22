@@ -603,31 +603,80 @@ extension ShellTests {
         #expect(!controller.isVisible)
     }
 
-    /// A right click's menu runs its tracking loop inside the panel's `sendEvent`. If the panel loses key status in
-    /// there (the test steals it with another window), it must not close, and it takes key status back afterwards
-    /// so typing still goes to the search field. Outside a context click, resigning key still closes the panel.
-    @Test func losingKeyDuringAContextClickKeepsThePanelOpenAndKey() async throws {
-        let (controller, _, _, _, _) = try controllerForMouse()
-        controller.show()
-        defer { controller.hide() }
-        try #require(await searchFieldHasFocus(controller.panel))
+    /// A titled window that can take key status from the panel, standing in for the menu or another app's window.
+    private func keyThief() -> NSWindow {
         let other = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 60, height: 60), styleMask: [.titled], backing: .buffered, defer: false
         )
         other.isReleasedWhenClosed = false
+        return other
+    }
+
+    /// A right click's menu runs its tracking loop inside the panel's `sendEvent`. If the panel loses key status in
+    /// there and the menu is dismissed with the mouse over the panel, the panel stays open and takes key status back.
+    @Test func menuDismissedInsideThePanelKeepsItOpenAndKey() async throws {
+        let (controller, _, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        let panel = controller.panel
+        controller.mouseLocation = { NSPoint(x: panel.frame.midX, y: panel.frame.midY) }
+        let other = keyThief()
         defer { other.orderOut(nil) }
 
-        controller.panel.handlingContextClick {
+        panel.handlingContextClick {
             other.makeKeyAndOrderFront(nil)
-            #expect(!controller.panel.isKeyWindow)
+            #expect(!panel.isKeyWindow)
         }
         #expect(controller.isVisible)
-        #expect(controller.panel.isKeyWindow)
-        #expect(await searchFieldHasFocus(controller.panel))
+        #expect(panel.isKeyWindow)
+        #expect(await searchFieldHasFocus(panel))
 
+        // Outside a context click, losing key still closes the panel.
         other.makeKeyAndOrderFront(nil)
         await pump(0.1)
         #expect(!controller.isVisible)
+    }
+
+    /// Dismissing the menu by clicking somewhere else (another app's window took key) must close the panel, as any
+    /// click-away does, and must not take key status back: that app's typing would otherwise land in the panel.
+    @Test func menuDismissedOutsideThePanelClosesItWithoutRekeying() async throws {
+        let (controller, _, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        let panel = controller.panel
+        controller.mouseLocation = { NSPoint(x: panel.frame.maxX + 200, y: panel.frame.maxY + 200) }
+        let other = keyThief()
+        defer { other.orderOut(nil) }
+
+        panel.handlingContextClick { other.makeKeyAndOrderFront(nil) }
+        #expect(!controller.isVisible)
+        #expect(!panel.isKeyWindow)
+        #expect(NSApp.keyWindow !== panel)
+    }
+
+    /// Choosing an item keeps the panel working even when the menu hung over the panel's edge, so the mouse was
+    /// outside the panel's frame when the item was picked.
+    @Test func choosingAMenuItemOutsideThePanelFrameKeepsItOpenAndKey() async throws {
+        let (controller, model, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        let panel = controller.panel
+        controller.mouseLocation = { NSPoint(x: panel.frame.maxX + 200, y: panel.frame.maxY + 200) }
+        let menu = try contextMenu(onRow: 2, in: panel)
+        let other = keyThief()
+        defer { other.orderOut(nil) }
+
+        panel.handlingContextClick {
+            other.makeKeyAndOrderFront(nil)
+            menu.performActionForItem(at: menu.items.firstIndex { $0.title == "Pin" }!)
+        }
+        await pump(0.2)
+        #expect(model.clips.first?.isPinned == true)
+        #expect(controller.isVisible)
+        #expect(panel.isKeyWindow)
     }
 }
 }

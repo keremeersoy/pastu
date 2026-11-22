@@ -7,7 +7,7 @@ import Testing
 @Suite struct PasteCoordinatorTests {
     /// "Copy" in the row menu: the clip goes on the clipboard and moves up the history, but no ⌘V is sent
     /// (and so no Accessibility prompt is needed).
-    @Test func copyPutsTheClipOnThePasteboardWithoutSendingCommandV() throws {
+    @Test func copyPutsTheClipOnThePasteboardWithoutSendingCommandV() async throws {
         // A private pasteboard: this test never touches the user's clipboard.
         let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
         defer { raw.releaseGlobally() }
@@ -26,6 +26,8 @@ import Testing
         #expect(raw.string(forType: .string) == "copied by mouse")
         let updated = try #require(try store.recent().first { $0.id == id })
         #expect(updated.lastCopiedAt > old)
+        // `paste` sends ⌘V 80 ms later; wait past that so a delayed send from `copy` would be caught too.
+        try? await Task.sleep(for: .milliseconds(150))
         #expect(pastes == 0)
     }
 }

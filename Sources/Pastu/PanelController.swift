@@ -19,6 +19,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     let panel = ClipPanel(size: PanelController.size)
     /// Watches ⌘ only while the panel is visible (started in `show`, stopped in `hide`).
     let commandKeys = CommandKeyMonitor()
+    /// Where the mouse is, in screen coordinates; replaceable so tests can dismiss a menu "outside" the panel.
+    var mouseLocation: () -> NSPoint = { NSEvent.mouseLocation }
 
     var isVisible: Bool { panel.isVisible }
 
@@ -52,7 +54,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.hide() }
         panel.onDeleteSelected = { [weak self] in self?.model.deleteSelected() }
-        panel.onContextClickEnded = { [weak self] in self?.reclaimKeyAfterContextMenu() }
+        panel.onContextClickEnded = { [weak self] chose in self?.contextClickEnded(choseMenuItem: chose) }
     }
 
     func toggle() {
@@ -142,12 +144,18 @@ final class PanelController: NSObject, NSWindowDelegate {
         hide()
     }
 
-    /// After a row menu closed with the panel still open (Pin, Delete, Ignore, or dismissed), typing must go to the
-    /// search field again. `makeKey` on the non-activating panel does not activate Pastu, so the app the user came
-    /// from stays frontmost and still receives the ⌘V.
-    private func reclaimKeyAfterContextMenu() {
+    /// A row menu closed and the panel lost key status during it (the resign was held back). If the user chose an
+    /// item, or dismissed the menu with the mouse over the panel, they are still working in the panel: take key
+    /// status back so typing goes to the search field (`makeKey` on the non-activating panel does not activate
+    /// Pastu). Otherwise they dismissed it by clicking elsewhere, maybe in another app: do the resign that was held
+    /// back and close, never re-key, or that app's keystrokes would land in Pastu's search field.
+    private func contextClickEnded(choseMenuItem: Bool) {
         guard panel.isVisible, !panel.isKeyWindow else { return }
-        panel.makeKey()
+        if choseMenuItem || NSMouseInRect(mouseLocation(), panel.frame, false) {
+            panel.makeKey()
+        } else {
+            hide()
+        }
     }
 
     private func screenUnderMouse() -> NSScreen? {
