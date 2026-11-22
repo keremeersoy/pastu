@@ -126,7 +126,12 @@ struct PanelView: View {
         Button("Copy") { act(on: clip, onCopyOnly) }
         Divider()
         Button(clip.isPinned ? "Unpin" : "Pin") { act(on: clip, model.togglePinSelected) }
-        Button("Delete") { act(on: clip, model.deleteSelected) }
+        Button("Delete") {
+            act(on: clip) {
+                model.deleteSelected()
+                PanelCaches.purge()
+            }
+        }
         Divider()
         let app = clip.sourceBundleIdentifier.map { AppLookup.name(for: $0) ?? $0 }
         Button(app.map { "Ignore “\($0)”" } ?? "Ignore App") { act(on: clip, onIgnoreApp) }

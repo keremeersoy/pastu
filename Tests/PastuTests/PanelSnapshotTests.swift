@@ -366,6 +366,46 @@ extension ShellTests {
         let gap = long.distance(from: cut.tailStart, to: deep.lowerBound)
         #expect((120...130).contains(gap))
         #expect(long[cut.headEnd] == " ")
+
+        // Minified JSON, base64 or a token: no space anywhere before the match, but it must still be reachable.
+        let dense = String(repeating: "x", count: 1_500) + "needle" + String(repeating: "y", count: 200)
+        let denseMatch = try #require(dense.range(of: "needle"))
+        let denseCut = try #require(PreviewContent.anchorSplit(in: dense, firstMatch: denseMatch.lowerBound))
+        #expect(denseCut.tailStart <= denseMatch.lowerBound)
+        #expect(dense.distance(from: denseCut.tailStart, to: denseMatch.lowerBound) <= 130)
+        #expect(denseCut.headEnd == denseCut.tailStart)
+    }
+
+    /// Hiding the panel forgets every clip's text and pictures held for drawing, so nothing deleted or cleared
+    /// (⌘⌫, Clear History…, retention) lingers in memory.
+    @Test func hidingThePanelPurgesPreviewAndPictureCaches() async throws {
+        let (model, loader) = try pictureSample()
+        let controller = PanelController(model: model, canAutoPaste: { true }, imageData: loader, onSelect: { _ in })
+        controller.show()
+        try await Task.sleep(for: .milliseconds(300))
+        let text = try #require(model.clips.first { $0.kind == .text })
+        _ = PreviewContent.cached(for: text, query: "launch")
+        #expect(PreviewContent.cachedCount > 0)
+        #expect(ImageCache.shared.entryCount > 0) // the rows drew their thumbnails
+
+        controller.hide()
+        #expect(PreviewContent.cachedCount == 0)
+        #expect(ImageCache.shared.entryCount == 0)
+        #expect(!ImageCache.shared.holdsFullImage)
+    }
+
+    /// ⌘⌫ purges at once too, while the panel stays open.
+    @Test func deletingAClipPurgesTheCaches() async throws {
+        let (model, loader) = try pictureSample()
+        let controller = PanelController(model: model, canAutoPaste: { true }, imageData: loader, onSelect: { _ in })
+        controller.show()
+        defer { controller.hide() }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(ImageCache.shared.entryCount > 0)
+        _ = PreviewContent.cached(for: try #require(model.selectedClip), query: "")
+        controller.panel.onDeleteSelected?()
+        #expect(PreviewContent.cachedCount == 0)
+        #expect(ImageCache.shared.entryCount == 0)
     }
 
     private func appearanceName(_ appearance: NSAppearance.Name) -> String { appearance == .aqua ? "light" : "dark" }

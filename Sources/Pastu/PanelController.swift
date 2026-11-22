@@ -53,7 +53,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         super.init()
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.hide() }
-        panel.onDeleteSelected = { [weak self] in self?.model.deleteSelected() }
+        panel.onDeleteSelected = { [weak self] in
+            self?.model.deleteSelected()
+            PanelCaches.purge()
+        }
         panel.onContextClickEnded = { [weak self] chose in self?.contextClickEnded(choseMenuItem: chose) }
     }
 
@@ -135,6 +138,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     func hide() {
         commandKeys.stop()
         panel.orderOut(nil)
+        PanelCaches.purge()
     }
 
     /// Clicking away closes the panel. A row's context menu is the exception: if its tracking loop takes key status,

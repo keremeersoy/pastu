@@ -182,6 +182,10 @@ struct PreviewContent {
     /// How many contents were actually built; lets tests prove the cache is used.
     @MainActor private(set) static var computations = 0
     @MainActor private static var cache: [(key: Key, content: PreviewContent)] = []
+    @MainActor static var cachedCount: Int { cache.count }
+
+    /// Forgets every cached preview; see `PanelCaches.purge()`.
+    @MainActor static func purge() { cache.removeAll() }
     /// A few entries are enough: the selected clip, and the ones just before it while moving through the list.
     private static let cacheLimit = 8
 
@@ -243,7 +247,8 @@ struct PreviewContent {
 
     /// Where to cut the shown text so the second piece starts at the first match's line: `headEnd` drops the line
     /// break between the pieces (the two `Text`s stack anyway). A very long line is cut at a space a little before
-    /// the match instead, so the match still lands in view. Nil when the match is already near the top.
+    /// the match instead, so the match still lands in view; a line without spaces there (minified JSON, base64, a
+    /// token) is cut mid-word, because reaching the match matters more. Nil when the match is already near the top.
     static func anchorSplit(in text: String, firstMatch: String.Index) -> (headEnd: String.Index, tailStart: String.Index)? {
         let lineStart = text[..<firstMatch].lastIndex(where: \.isNewline).map { text.index(after: $0) } ?? text.startIndex
         if text.distance(from: lineStart, to: firstMatch) <= 240 {
@@ -251,7 +256,7 @@ struct PreviewContent {
             return (text.index(before: lineStart), lineStart)
         }
         let near = text.index(firstMatch, offsetBy: -120)
-        guard let space = text[lineStart..<near].lastIndex(where: { $0 == " " }) else { return nil }
+        guard let space = text[lineStart..<near].lastIndex(where: { $0 == " " }) else { return (near, near) }
         return (space, text.index(after: space))
     }
 }

@@ -36,6 +36,13 @@ final class ImageCache {
     }
 
     private var lastFull: (clipID: Int64, image: NSImage)?
+    var holdsFullImage: Bool { lastFull != nil }
+
+    /// Drops every thumbnail and the full picture; see `PanelCaches.purge()`.
+    func removeAll() {
+        entries.removeAll()
+        lastFull = nil
+    }
 
     /// The full-size picture for the preview pane. Only the one on screen is kept (a big screenshot can be
     /// megabytes), so moving the selection decodes the next one and drops the previous.
@@ -57,5 +64,16 @@ final class ImageCache {
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
         return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+    }
+}
+
+/// Everything the panel keeps in memory to draw clips: thumbnails, the full picture and preview text. Purged when the
+/// panel hides and right after a delete or Clear History, so a clip the user removed does not linger in memory.
+/// (Retention pruning runs while copying, normally with the panel hidden, so the hide purge covers it.)
+@MainActor
+enum PanelCaches {
+    static func purge() {
+        ImageCache.shared.removeAll()
+        PreviewContent.purge()
     }
 }
