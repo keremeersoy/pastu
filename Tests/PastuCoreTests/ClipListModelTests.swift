@@ -382,6 +382,13 @@ import Testing
         #expect(model.hasMore == true)
     }
 
+    @Test func resetForShowHidesTheShortcutsOverlay() throws {
+        let model = ClipListModel(store: try makeStore(["a"]))
+        model.showsShortcuts = true
+        model.resetForShow()
+        #expect(model.showsShortcuts == false)
+    }
+
     @Test func escapeClearsQueryFirstThenCloses() throws {
         let model = ClipListModel(store: try makeStore(["a", "b"]))
         model.query = "a"

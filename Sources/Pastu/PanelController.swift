@@ -52,7 +52,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         self.onSelect = onSelect
         super.init()
         panel.delegate = self
-        panel.onCancel = { [weak self] in self?.hide() }
+        panel.onCancel = { [weak self] in
+            // An open shortcuts overlay is dismissed first; the panel itself closes on the next Esc.
+            if model.showsShortcuts { model.showsShortcuts = false } else { self?.hide() }
+        }
         panel.onDeleteSelected = { [weak self] in
             guard let self, let id = model.selectedClip?.id else { return }
             model.deleteSelected()

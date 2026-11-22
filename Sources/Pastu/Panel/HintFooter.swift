@@ -3,6 +3,7 @@ import SwiftUI
 struct HintFooter: View {
     let canAutoPaste: Bool
     let notice: String?
+    @Binding var showsShortcuts: Bool
 
     var body: some View {
         HStack(spacing: 16) {
@@ -10,10 +11,10 @@ struct HintFooter: View {
                 // A one-off message replaces the hints until the user moves on.
                 Label(notice, systemImage: "info.circle.fill")
                     .foregroundStyle(Color.accentColor)
+                Spacer()
             } else {
                 hints
             }
-            Spacer()
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -24,13 +25,29 @@ struct HintFooter: View {
     @ViewBuilder
     private var hints: some View {
         // Without the Accessibility permission Pastu only copies; the banner above explains how to fix it.
-        Text(canAutoPaste ? "↩ Paste" : "↩ Copy")
-        Text("⌘1–9 Quick paste")
-        Text("⌘P Pin")
-        Text("⌘⌫ Delete")
-        Text("⌘I Ignore app")
-        Text("⇥ Filter")
-        Text("↑↓ Select")
-        Text("esc Close")
+        hint("↩", canAutoPaste ? "Paste" : "Copy")
+        hint("⌘P", "Pin")
+        hint("⌘⌫", "Delete")
+        Spacer()
+        // Never focusable: the search field keeps the keyboard. ⌘/ does the same from there.
+        Button {
+            showsShortcuts.toggle()
+        } label: {
+            hintLabel("⌘/", "Shortcuts")
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .accessibilityLabel("Keyboard shortcuts")
+    }
+
+    private func hint(_ keys: String, _ title: String) -> some View {
+        hintLabel(keys, title).accessibilityElement(children: .combine)
+    }
+
+    private func hintLabel(_ keys: String, _ title: String) -> some View {
+        HStack(spacing: 5) {
+            Keycap(text: keys)
+            Text(title)
+        }
     }
 }

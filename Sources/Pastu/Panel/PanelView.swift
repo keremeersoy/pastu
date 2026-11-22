@@ -29,6 +29,7 @@ struct PanelView: View {
     /// Whether ⌘ is held (all nine badges show). The controller starts and stops it with the panel.
     var commandKeys = CommandKeyMonitor()
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     /// Set by "Resume" so the banner goes away at once; the view is rebuilt (and `isPaused` re-read) on every show.
     @State private var resumed = false
@@ -62,6 +63,12 @@ struct PanelView: View {
                     onIgnoreApp()
                     return .handled
                 }
+                .onKeyPress(characters: CharacterSet(charactersIn: "/"), phases: .down) { press in
+                    // ⌘/ shows or hides the shortcuts overlay.
+                    guard press.modifiers.contains(.command) else { return .ignored }
+                    model.showsShortcuts.toggle()
+                    return .handled
+                }
                 .onKeyPress(characters: CharacterSet(charactersIn: "pP"), phases: .down) { press in
                     // ⌘P pins or unpins the selected clip.
                     guard press.modifiers.contains(.command) else { return .ignored }
@@ -82,9 +89,7 @@ struct PanelView: View {
 
             // No dividers between header, content and footer: spacing and the preview's own surface separate them.
             if model.clips.isEmpty {
-                Text(emptyMessage)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyState(query: model.query, filter: model.filter)
             } else {
                 HStack(spacing: 0) {
                     list.frame(width: PanelMetrics.listWidth)
@@ -94,21 +99,22 @@ struct PanelView: View {
                 }
             }
 
-            HintFooter(canAutoPaste: canAutoPaste, notice: model.notice)
+            HintFooter(canAutoPaste: canAutoPaste, notice: model.notice, showsShortcuts: Bindable(model).showsShortcuts)
+        }
+        .overlay {
+            // Over the content area, not the whole shell; it cannot take focus (no focusable views inside).
+            if model.showsShortcuts {
+                ShortcutsOverlay().transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: model.showsShortcuts)
+        // Focus stays in the search field, so VoiceOver would not notice a notice appearing: say it.
+        .onChange(of: model.notice) {
+            if let notice = model.notice { AccessibilityNotification.Announcement(notice).post() }
         }
         .frame(width: PanelMetrics.size.width, height: PanelMetrics.size.height)
         .panelShell()
         .onAppear { searchFocused = true }
-    }
-
-    private var emptyMessage: String {
-        if !model.query.isEmpty { return "No matches" }
-        switch model.filter {
-        case .all: return "Nothing copied yet"
-        case .text: return "No text clips"
-        case .links: return "No links"
-        case .images: return "No images"
-        }
     }
 
     /// Selects the row showing `clip`, then runs the action on the selection, so mouse actions go through the same

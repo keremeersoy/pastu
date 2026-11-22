@@ -127,8 +127,29 @@ extension ShellTests {
 
     @Test func panelRendersEmptyState() async throws {
         let model = ClipListModel(store: try ClipStore())
-        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        let (image, content) = try await renderWindow(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        #expect(containsText("Nothing copied yet", in: content))
+        #expect(containsText("Copy something, then press ⌘⇧V.", in: content))
         save(image, name: "panel-empty")
+    }
+
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func panelRendersShortcutsOverlay(appearance: NSAppearance.Name) async throws {
+        let model = try sampleModel()
+        model.showsShortcuts = true
+        let (image, content) = try await renderWindow(PanelView(model: model, canAutoPaste: true, onSubmit: {}), appearance: appearance)
+        #expect(containsText("Ignore app", in: content))
+        #expect(containsText("First / last", in: content))
+        save(image, name: "panel-shortcuts-\(appearanceName(appearance))")
+    }
+
+    @Test func panelRendersNoResultsInLinks() async throws {
+        let model = try sampleModel()
+        model.filter = .links
+        model.query = "zzz"
+        let (image, content) = try await renderWindow(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        #expect(containsText("Searching Links only. Press Tab to change.", in: content))
+        save(image, name: "panel-no-results-links")
     }
 
     @Test func panelRendersLinksFilter() async throws {
@@ -143,7 +164,8 @@ extension ShellTests {
         try store.insert(CapturedClip(text: "just a note", sourceBundleIdentifier: nil, date: Date()))
         let model = ClipListModel(store: store)
         model.filter = .links
-        let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        let (image, content) = try await renderWindow(PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        #expect(containsText("No links yet", in: content))
         save(image, name: "panel-links-empty")
     }
     @Test func panelRendersWithAFooterNotice() async throws {

@@ -31,6 +31,9 @@ public final class ClipListModel {
     /// when the selection moves or the query or filter changes.
     public var notice: String?
 
+    /// Whether the keyboard shortcuts overlay is open (⌘/). Lives here so the panel's Esc handling can close it first.
+    public var showsShortcuts = false
+
     /// True while the last fetched page was full, so there may be more rows to load.
     public private(set) var hasMore = false
 
@@ -116,6 +119,7 @@ public final class ClipListModel {
     /// Back to a fresh state each time the panel opens: no query, no filter, first page, top row.
     public func resetForShow() {
         notice = nil
+        showsShortcuts = false
         // The observers below would reload on their own; do it once explicitly so a no-change reset
         // still drops extra pages and the selection.
         query = ""

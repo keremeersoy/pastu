@@ -215,6 +215,45 @@ extension ShellTests {
         #expect(handled)
         #expect(deletes == 1)
     }
+    // MARK: Shortcuts overlay
+
+    /// ⌘/ is keyCode 44. The overlay must not take focus: Return and typing still go to the search field.
+    @Test func commandSlashTogglesShortcuts() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+
+        let model = ClipListModel(store: try ClipStore())
+        let panel = ClipPanel(size: NSSize(width: 780, height: 460))
+        panel.contentView = NSHostingView(rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        panel.makeKeyAndOrderFront(nil)
+        await pump()
+        defer { panel.orderOut(nil) }
+
+        try #require(await searchFieldHasFocus(panel), "first responder: \(String(describing: panel.firstResponder))")
+        NSApp.sendEvent(keyEvent("/", keyCode: 44, modifiers: .command, window: panel))
+        await pump(0.2)
+        #expect(model.showsShortcuts)
+        #expect(panel.firstResponder is NSTextView, "first responder: \(String(describing: panel.firstResponder))")
+        NSApp.sendEvent(keyEvent("/", keyCode: 44, modifiers: .command, window: panel))
+        await pump(0.2)
+        #expect(!model.showsShortcuts)
+    }
+
+    /// Esc closes an open overlay first; only the next Esc closes the panel.
+    @Test func escapeClosesTheShortcutsOverlayBeforeThePanel() async throws {
+        let (controller, model, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        model.showsShortcuts = true
+        controller.panel.cancelOperation(nil)
+        #expect(!model.showsShortcuts)
+        #expect(controller.isVisible)
+        controller.panel.cancelOperation(nil)
+        #expect(!controller.isVisible)
+    }
+
     // MARK: Banners
 
     /// Pressing the banner's Resume button goes through the controller to the recording state, and the banner goes away.
