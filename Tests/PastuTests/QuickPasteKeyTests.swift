@@ -109,6 +109,26 @@ extension ShellTests {
         #expect(model.filter == .all)
     }
 
+    /// Shift-Tab arrives as keyCode 48 with the back-tab character (U+0019), the way AppKit reports it.
+    @Test func shiftTabCyclesFiltersBackwards() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+
+        let model = ClipListModel(store: try ClipStore())
+        let panel = ClipPanel(size: NSSize(width: 780, height: 460))
+        panel.contentView = NSHostingView(rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {}))
+        panel.makeKeyAndOrderFront(nil)
+        await pump()
+        defer { panel.orderOut(nil) }
+
+        NSApp.sendEvent(keyEvent("\u{19}", keyCode: 48, modifiers: .shift, window: panel))
+        await pump(0.2)
+        #expect(model.filter == .images)
+        NSApp.sendEvent(keyEvent("\u{19}", keyCode: 48, modifiers: .shift, window: panel))
+        await pump(0.2)
+        #expect(model.filter == .links)
+    }
+
     /// Goes through PanelController (the real wiring: controller -> panel callback -> model) and calls the
     /// panel's performKeyEquivalent directly. NSApp.sendEvent would route ⌘ shortcuts to the KEY window, and
     /// whether a window can become key depends on the desktop (a locked screen or an inactive session
@@ -183,6 +203,97 @@ extension ShellTests {
         #expect(handled)
         #expect(deletes == 1)
     }
+    // MARK: Banners
+
+    /// Pressing the banner's Resume button goes through the controller to the recording state, and the banner goes away.
+    @Test func resumeInThePausedBannerResumesRecording() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        enableAccessibilityTree()
+        let recording = RecordingState()   // in memory
+        recording.toggle()
+        let controller = PanelController(
+            model: ClipListModel(store: try ClipStore()), canAutoPaste: { true },
+            isPaused: { recording.isPaused }, onResume: { recording.toggle() }, onSelect: { _ in }
+        )
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+        let content = try #require(controller.panel.contentView)
+
+        #expect(accessibilityElement(containing: "Recording is paused", in: content) != nil)
+        let resume = try #require(accessibilityElement(containing: "Resume", in: content))
+        #expect(accessibilityPress(resume))
+        await pump(0.2)
+        #expect(recording.isPaused == false)
+        #expect(accessibilityElement(containing: "Recording is paused", in: content) == nil)
+    }
+
+    /// "Enable…" hides the panel first (it would float above System Settings), then opens the settings pane.
+    @Test func enableInTheAccessibilityBannerHidesThePanelAndOpensSettings() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        enableAccessibilityTree()
+        var opened = 0
+        let controller = PanelController(
+            model: ClipListModel(store: try ClipStore()), canAutoPaste: { false },
+            openAccessibilitySettings: { opened += 1 }, onSelect: { _ in }
+        )
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+        let content = try #require(controller.panel.contentView)
+
+        let enable = try #require(accessibilityElement(containing: "Enable", in: content))
+        #expect(accessibilityPress(enable))
+        await pump(0.2)
+        #expect(opened == 1)
+        #expect(controller.isVisible == false)
+    }
+
+    // MARK: Mouse in the header
+
+    private func hostedPanel(_ model: ClipListModel, style: PanelStyle) async -> ClipPanel {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        enableAccessibilityTree()
+        let panel = ClipPanel(size: NSSize(width: 780, height: 460))
+        panel.contentView = NSHostingView(
+            rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {}).environment(\.panelStyle, style)
+        )
+        panel.makeKeyAndOrderFront(nil)
+        await pump()
+        return panel
+    }
+
+    /// Our own glass buttons. The macOS 15 segmented control is a stock Picker; pressing its AppKit segment through
+    /// accessibility in this harness ends the test process early (silently, exit 0), so it is only rendered.
+    @Test func clickingAFilterSelectsIt() async throws {
+        let model = ClipListModel(store: try ClipStore())
+        let panel = await hostedPanel(model, style: .glass)
+        defer { panel.orderOut(nil) }
+        let content = try #require(panel.contentView)
+
+        let links = try #require(accessibilityElement(containing: "Links", in: content))
+        #expect(accessibilityPress(links))
+        await pump(0.2)
+        #expect(model.filter == .links)
+    }
+
+    @Test func clearButtonEmptiesTheQuery() async throws {
+        let model = ClipListModel(store: try ClipStore())
+        model.query = "swift"
+        let panel = await hostedPanel(model, style: .system)
+        defer { panel.orderOut(nil) }
+        let content = try #require(panel.contentView)
+
+        let clear = try #require(accessibilityElement(containing: "Clear search", in: content))
+        #expect(accessibilityPress(clear))
+        await pump(0.2)
+        #expect(model.query.isEmpty)
+        #expect(accessibilityElement(containing: "Clear search", in: content) == nil)
+    }
+
     // MARK: Ignore the source app (⌘I)
 
     private func controllerWithClips(app: String?) throws -> (PanelController, ClipListModel, IgnoredApps) {

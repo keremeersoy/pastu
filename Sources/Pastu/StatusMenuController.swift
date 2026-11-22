@@ -100,20 +100,22 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: Actions
 
     @objc private func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+        SystemSettings.openAccessibility()
     }
 
     @objc private func openPrivacySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
-            NSWorkspace.shared.open(url)
-        }
+        SystemSettings.openPrivacy()
     }
 
     @objc private func toggleRecording() {
         recording.toggle()
         updatePauseUI()
+    }
+
+    /// The panel's "Resume" button: same as the menu item, so the menu bar icon updates too.
+    func resumeRecording() {
+        guard recording.isPaused else { return }
+        toggleRecording()
     }
 
     private func updatePauseUI() {

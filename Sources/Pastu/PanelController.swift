@@ -12,23 +12,35 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let canAutoPaste: () -> Bool
     private let ignoredApps: IgnoredApps
     private let imageData: (Int64) -> Data?
+    private let isPaused: () -> Bool
+    private let onResume: () -> Void
+    private let openAccessibilitySettings: () -> Void
     let panel = ClipPanel(size: PanelController.size)
 
     var isVisible: Bool { panel.isVisible }
 
     /// - Parameter onSelect: called after the panel closed, with the clip the user picked.
-    /// - Parameter canAutoPaste: whether Pastu may send ⌘V (Accessibility permission); shown in the footer.
+    /// - Parameter canAutoPaste: whether Pastu may send ⌘V (Accessibility permission); a banner says so if not.
+    /// - Parameter isPaused: whether recording is paused; read each time the panel opens.
+    /// - Parameter onResume: the paused banner's "Resume" button.
+    /// - Parameter openAccessibilitySettings: the Accessibility banner's "Enable…" button; the panel hides first.
     init(
         model: ClipListModel,
         canAutoPaste: @escaping () -> Bool,
         ignoredApps: IgnoredApps = IgnoredApps(),
         imageData: @escaping (Int64) -> Data? = { _ in nil },
+        isPaused: @escaping () -> Bool = { false },
+        onResume: @escaping () -> Void = {},
+        openAccessibilitySettings: @escaping () -> Void = SystemSettings.openAccessibility,
         onSelect: @escaping (StoredClip) -> Void
     ) {
         self.model = model
         self.canAutoPaste = canAutoPaste
         self.ignoredApps = ignoredApps
         self.imageData = imageData
+        self.isPaused = isPaused
+        self.onResume = onResume
+        self.openAccessibilitySettings = openAccessibilitySettings
         self.onSelect = onSelect
         super.init()
         panel.delegate = self
@@ -47,8 +59,15 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.contentView = NSHostingView(rootView: PanelView(
             model: model,
             canAutoPaste: canAutoPaste(),
+            isPaused: isPaused(),
             onSubmit: { [weak self] in self?.submit() },
             onIgnoreApp: { [weak self] in self?.ignoreSelectedApp() },
+            onResume: onResume,
+            onOpenAccessibilitySettings: { [weak self] in
+                // Hide first: the floating panel would otherwise cover System Settings.
+                self?.hide()
+                self?.openAccessibilitySettings()
+            },
             imageData: imageData
         ))
         // The shadow of a borderless, transparent window is traced from its drawn pixels: draw the

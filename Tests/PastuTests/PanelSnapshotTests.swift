@@ -66,6 +66,8 @@ extension ShellTests {
     ) async throws -> (image: NSImage, content: NSView) {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
+        // Cheap, and the banner tests read the accessibility tree, which must be switched on before hosting.
+        enableAccessibilityTree()
         let panel = ClipPanel(size: PanelMetrics.size)
         panel.appearance = NSAppearance(named: appearance)
         panel.contentView = NSHostingView(rootView: view)
@@ -97,6 +99,10 @@ extension ShellTests {
 
     private func containsVisualEffectView(_ view: NSView) -> Bool {
         view is NSVisualEffectView || view.subviews.contains(where: containsVisualEffectView)
+    }
+
+    private func containsText(_ text: String, in view: NSView) -> Bool {
+        accessibilityElement(containing: text, in: view) != nil
     }
 
     private func save(_ image: NSImage, name: String) {
@@ -163,6 +169,42 @@ extension ShellTests {
         let (model, _) = try pictureSample()
         let image = try await render(PanelView(model: model, canAutoPaste: true, onSubmit: {}, imageData: { _ in nil }))
         save(image, name: "panel-picture-missing")
+    }
+
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func panelRendersAccessibilityBanner(appearance: NSAppearance.Name) async throws {
+        let (image, content) = try await renderWindow(
+            PanelView(model: try sampleModel(), canAutoPaste: false, onSubmit: {}), appearance: appearance
+        )
+        save(image, name: "panel-banner-accessibility-\(appearance == .aqua ? "light" : "dark")")
+        #expect(image.size == PanelMetrics.size)
+        #expect(containsText("Pastu can't paste for you", in: content))
+    }
+
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func panelRendersPausedBanner(appearance: NSAppearance.Name) async throws {
+        let (image, content) = try await renderWindow(
+            PanelView(model: try sampleModel(), canAutoPaste: true, isPaused: true, onSubmit: {}), appearance: appearance
+        )
+        save(image, name: "panel-banner-paused-\(appearance == .aqua ? "light" : "dark")")
+        #expect(image.size == PanelMetrics.size)
+        #expect(containsText("Recording is paused", in: content))
+        // One banner at a time, and a normal panel shows none.
+        #expect(!(containsText("Pastu can't paste for you", in: content)))
+    }
+
+    @Test func panelShowsNoBannerWhenAllIsWell() async throws {
+        let (_, content) = try await renderWindow(PanelView(model: try sampleModel(), canAutoPaste: true, onSubmit: {}))
+        #expect(!(containsText("Pastu can't paste for you", in: content)))
+        #expect(!(containsText("Recording is paused", in: content)))
+    }
+
+    @Test func panelRendersLegacyFilterControl() async throws {
+        let view = PanelView(model: try sampleModel(), canAutoPaste: true, isPaused: true, onSubmit: {})
+            .environment(\.panelStyle, .legacy)
+        let (image, content) = try await renderWindow(view, appearance: .aqua)
+        save(image, name: "panel-banner-paused-legacy-light")
+        #expect(containsText("Recording is paused", in: content))
     }
 
     @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])

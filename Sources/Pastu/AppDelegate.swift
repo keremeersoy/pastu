@@ -41,7 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model: model,
                 canAutoPaste: { PasteSender.isTrusted },
                 ignoredApps: ignoredApps,
-                imageData: { id in (try? store.imageData(id: id)) ?? nil }
+                imageData: { id in (try? store.imageData(id: id)) ?? nil },
+                isPaused: { [recording] in recording.isPaused },
+                onResume: { [weak self] in self?.statusMenu.resumeRecording() }
             ) { [weak self] clip in
                 self?.pasteCoordinator.paste(clip)
             }

@@ -23,13 +23,8 @@ struct HintFooter: View {
 
     @ViewBuilder
     private var hints: some View {
-        if canAutoPaste {
-            Text("↩ Paste")
-        } else {
-            // Without the Accessibility permission Pastu can only copy; the user presses ⌘V themselves.
-            Label("↩ Copies only: enable Accessibility to auto-paste", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-        }
+        // Without the Accessibility permission Pastu only copies; the banner above explains how to fix it.
+        Text(canAutoPaste ? "↩ Paste" : "↩ Copy")
         Text("⌘1–9 Quick paste")
         Text("⌘P Pin")
         Text("⌘⌫ Delete")

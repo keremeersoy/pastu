@@ -15,24 +15,35 @@ enum PanelMetrics {
 struct PanelView: View {
     let model: ClipListModel
     let canAutoPaste: Bool
+    var isPaused: Bool = false
     let onSubmit: () -> Void
     var onIgnoreApp: () -> Void = {}
+    /// The paused banner's "Resume" button.
+    var onResume: () -> Void = {}
+    /// The Accessibility banner's "Enable…" button.
+    var onOpenAccessibilitySettings: () -> Void = {}
     /// Loads a picture clip's PNG bytes; the default shows a placeholder.
     var imageData: (Int64) -> Data? = { _ in nil }
 
     @FocusState private var searchFocused: Bool
+    /// Set by "Resume" so the banner goes away at once; the view is rebuilt (and `isPaused` re-read) on every show.
+    @State private var resumed = false
+
+    private var banner: PanelBanner? {
+        PanelBanner.current(canAutoPaste: canAutoPaste, isPaused: isPaused && !resumed)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Search clipboard history", text: Bindable(model).query)
-                .textFieldStyle(.plain)
-                .font(.title3)
-                .padding(14)
-                .focused($searchFocused)
+            SearchHeader(query: Bindable(model).query, filter: Bindable(model).filter, focused: $searchFocused)
                 .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
                 .onKeyPress(.downArrow) { model.moveSelection(by: 1); return .handled }
                 .onKeyPress(.return) { onSubmit(); return .handled }
-                .onKeyPress(.tab) { model.cycleFilter(); return .handled }
+                // AppKit reports Shift-Tab as the back-tab character (U+0019), not as Tab plus Shift.
+                .onKeyPress(keys: [.tab, KeyEquivalent("\u{19}")]) { press in
+                    model.cycleFilter(reverse: press.modifiers.contains(.shift) || press.key.character == "\u{19}")
+                    return .handled
+                }
                 .onKeyPress(characters: .decimalDigits, phases: .down) { press in
                     // ⌘1-9 pastes the nth row directly.
                     guard press.modifiers.contains(.command),
@@ -54,7 +65,16 @@ struct PanelView: View {
                     return .handled
                 }
 
-            FilterBar(selected: model.filter)
+            if let banner {
+                BannerRow(banner: banner) {
+                    switch banner {
+                    case .accessibilityMissing: onOpenAccessibilitySettings()
+                    case .recordingPaused:
+                        resumed = true
+                        onResume()
+                    }
+                }
+            }
 
             Divider()
 
