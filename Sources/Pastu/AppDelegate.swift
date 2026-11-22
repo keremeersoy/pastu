@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.statusMenu.storageError = nil
                 } catch {
                     NSLog("Pastu could not save a clip: \(error)")
-                    self.statusMenu.storageError = "could not save: \(error)"
+                    self.statusMenu.storageError = .save
                 }
                 if self.panelController?.isVisible == true { model.refresh() }
             }
@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pasteCoordinator.monitor = monitor
         } catch {
             NSLog("Pastu could not open its database: \(error)")
-            statusMenu.storageError = "could not open history: \(error)"
+            statusMenu.storageError = .open
         }
 
         // ⌘⇧V

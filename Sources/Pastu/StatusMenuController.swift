@@ -5,11 +5,24 @@ import PastuCore
 /// Warnings and the ignored-apps submenu are refreshed every time the menu opens.
 @MainActor
 final class StatusMenuController: NSObject, NSMenuDelegate {
-    /// Set once the database is open; "Clear history…" does nothing without it.
+    /// Set once the database is open; "Clear History…" does nothing without it.
     var store: ClipStore?
     var model: ClipListModel?
-    /// Set when the history database could not be opened or written; shown in the menu.
-    var storageError: String?
+    /// What went wrong with the history database, if anything. The raw error goes to `NSLog` where it happens;
+    /// the menu only shows a short, human sentence.
+    enum StorageProblem {
+        case open, save, clear
+
+        var message: String {
+            switch self {
+            case .open: "Pastu can't open its history"
+            case .save: "Pastu can't save new clips right now"
+            case .clear: "Pastu couldn't clear the history"
+            }
+        }
+    }
+
+    var storageError: StorageProblem?
     var onShowPanel: () -> Void = {}
 
     private let recording: RecordingState
@@ -30,58 +43,72 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         super.init()
     }
 
-    /// Adds the item to the menu bar. Call once, after launch.
-    func install() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(
-            systemSymbolName: "doc.on.clipboard",
-            accessibilityDescription: PastuInfo.name
-        )
+    /// The menu, for tests.
+    var menuForTesting: NSMenu { menu }
+    private var menu = NSMenu()
 
+    /// What VoiceOver says for the menu bar icon.
+    static func accessibilityDescription(isPaused: Bool) -> String {
+        isPaused ? "\(PastuInfo.name) (paused)" : PastuInfo.name
+    }
+
+    /// Builds the menu and, unless `inStatusBar` is false (tests), adds the item to the menu bar. Call once, after launch.
+    func install(inStatusBar: Bool = true) {
         let menu = NSMenu()
+        self.menu = menu
         let warning = NSMenuItem(
-            title: "Clipboard access is denied — open Privacy settings…",
+            title: "Pastu can't read the clipboard — open Privacy settings…",
             action: #selector(openPrivacySettings), keyEquivalent: ""
         )
         warning.target = self
         warning.isHidden = true
         menu.addItem(warning)
+        warning.image = Self.warningImage
         accessWarningItem = warning
         menu.delegate = self
 
         let accessibilityWarning = NSMenuItem(
-            title: "Pastu needs Accessibility permission to paste — open settings…",
+            title: "Pastu needs Accessibility permission to paste — open Settings…",
             action: #selector(openAccessibilitySettings), keyEquivalent: ""
         )
         accessibilityWarning.target = self
+        accessibilityWarning.image = Self.warningImage
         accessibilityWarning.isHidden = true
         menu.addItem(accessibilityWarning)
         accessibilityWarningItem = accessibilityWarning
 
         let storageWarning = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        storageWarning.image = Self.warningImage
         storageWarning.isHidden = true
         menu.addItem(storageWarning)
         storageWarningItem = storageWarning
 
-        menu.addItem(withTitle: "Show \(PastuInfo.name)", action: #selector(togglePanel), keyEquivalent: "")
-            .target = self
-        let pause = menu.addItem(withTitle: "Pause recording", action: #selector(toggleRecording), keyEquivalent: "")
+        // Display only: the Carbon hotkey is the real trigger. Showing it teaches the shortcut.
+        let show = menu.addItem(withTitle: "Show \(PastuInfo.name)", action: #selector(togglePanel), keyEquivalent: "v")
+        show.keyEquivalentModifierMask = [.command, .shift]
+        show.target = self
+        let pause = menu.addItem(withTitle: "Pause Recording", action: #selector(toggleRecording), keyEquivalent: "")
         pause.target = self
         pauseItem = pause
-        menu.addItem(withTitle: "Clear history…", action: #selector(clearHistory), keyEquivalent: "")
+        menu.addItem(withTitle: "Clear History…", action: #selector(clearHistory), keyEquivalent: "")
             .target = self
-        let ignored = NSMenuItem(title: "Ignored apps", action: nil, keyEquivalent: "")
+        let ignored = NSMenuItem(title: "Ignored Apps", action: nil, keyEquivalent: "")
         ignored.submenu = NSMenu()
         menu.addItem(ignored)
         ignoredMenuItem = ignored
         menu.addItem(.separator())
+        menu.addItem(withTitle: "About \(PastuInfo.name)", action: #selector(showAbout), keyEquivalent: "")
+            .target = self
         menu.addItem(
             withTitle: "Quit \(PastuInfo.name)",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
-        item.menu = menu
-        statusItem = item
+        if inStatusBar {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            item.menu = menu
+            statusItem = item
+        }
         updatePauseUI()
     }
 
@@ -90,7 +117,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         accessWarningItem?.isHidden = !systemPasteboard.isAccessDenied
         accessibilityWarningItem?.isHidden = PasteSender.isTrusted
         if let storageError {
-            storageWarningItem?.title = "⚠︎ History problem: \(storageError)"
+            storageWarningItem?.title = storageError.message
             storageWarningItem?.isHidden = false
         } else {
             storageWarningItem?.isHidden = true
@@ -107,7 +134,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         SystemSettings.openPrivacy()
     }
 
-    @objc private func toggleRecording() {
+    @objc func toggleRecording() {
         recording.toggle()
         updatePauseUI()
     }
@@ -119,14 +146,20 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     private func updatePauseUI() {
-        pauseItem?.title = recording.isPaused ? "Resume recording" : "Pause recording"
+        // A checkmark, not a renamed item: the menu keeps one stable label per action.
+        pauseItem?.state = recording.isPaused ? .on : .off
         let symbol = recording.isPaused ? "pause.circle" : "doc.on.clipboard"
-        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: PastuInfo.name)
+        statusItem?.button?.image = NSImage(
+            systemSymbolName: symbol,
+            accessibilityDescription: Self.accessibilityDescription(isPaused: recording.isPaused)
+        )
         statusItem?.button?.appearsDisabled = recording.isPaused
     }
 
     @objc private func clearHistory() {
         guard let store else { return }
+        // An accessory app is not frontmost; without this the alert can open behind other windows.
+        NSApp.activate()
         let alert = NSAlert()
         alert.messageText = "Clear clipboard history?"
         alert.informativeText = "All clips except pinned ones will be deleted. This cannot be undone."
@@ -140,9 +173,18 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             PanelCaches.purgeAll()
         } catch {
             NSLog("Pastu could not clear the history: \(error)")
-            storageError = "could not clear: \(error)"
+            storageError = .clear
         }
         model?.refresh()
+    }
+
+    @objc private func showAbout() {
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    private static var warningImage: NSImage? {
+        NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Warning")
     }
 
     @objc private func togglePanel() {

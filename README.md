@@ -48,12 +48,18 @@ yourself.
 | ⌘⇧V | Open Pastu |
 | Type | Search everything you copied |
 | ↑ ↓ / Return | Pick a clip and paste it |
+| ⌘↑ ⌘↓ / Home End | Jump to the first or last clip |
+| Page Up / Page Down | Move a page at a time |
 | ⌘1 – ⌘9 | Paste one of the first nine clips |
 | ⌘P | Pin a clip (stays on top, never deleted) |
 | ⌘⌫ | Delete a clip |
 | ⌘I | Never record copies from this clip's app |
-| Tab | Show all, text, links or images |
-| Esc | Close |
+| Tab / ⇧Tab | Show all, text, links or images (⇧Tab goes backwards) |
+| ⌘/ | Show all shortcuts |
+| Esc | Clear the search first, then close |
+
+With the mouse: click a clip to select it, double click to paste it, right click for Paste, Copy, Pin, Delete and
+Ignore.
 
 The menu bar icon lets you pause recording, clear the history and manage ignored apps.
 

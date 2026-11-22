@@ -6,6 +6,32 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- A redesigned panel with a Liquid Glass look on macOS 26 (a clean fallback look on macOS 15), rounded corners
+  and a calmer preview with source, time and size.
+- Mouse support: click a clip to select it, double click to paste it, right click for Paste, Copy, Pin, Delete and
+  Ignore app. Clicking never takes focus away from the app you are pasting into.
+- Pictures show as thumbnails in the list and a large preview, with their size.
+- Links open from the preview; code-like clips use a monospaced font; search matches are highlighted and the
+  preview jumps to the match in long clips.
+- Keyboard: ⇧Tab filters backwards, ⌘↑/⌘↓ and Home/End jump to the first or last clip, Page Up/Down move by a page,
+  and ⌘/ shows every shortcut.
+- Clear messages for empty history, no results and filters with nothing in them.
+- VoiceOver reads each clip and announces selection changes and notices.
+- "About Pastu" in the menu bar menu.
+
+### Changed
+- Esc clears the search first and closes the panel on the second press.
+- The panel always opens on "All" with the newest clip selected and an empty search.
+- The menu bar menu follows macOS conventions: title-case items, a checkmark on "Pause Recording" instead of a
+  renamed item, and ⌘⇧V shown next to "Show Pastu".
+- Warnings in the menu use an icon and plain wording instead of raw error text.
+- Long histories load more clips as you scroll.
+
+### Fixed
+- The Clear History confirmation could open behind other windows.
+- Thumbnails no longer reload every time the panel opens.
+
 ## [0.1.1] - 2026-11-21
 
 First public prerelease (early prototype). Not notarized; see the release notes for first-launch steps.
