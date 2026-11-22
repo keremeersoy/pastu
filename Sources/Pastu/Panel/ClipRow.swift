@@ -101,22 +101,8 @@ struct ClipRow: View {
         }
     }
 
-    /// Matches in semibold. On the accent fill they are also underlined and full white, because a colored
-    /// background behind the match would fight the selection color.
     private func highlighted(_ text: String, ranges: [Range<String.Index>], font: Font) -> AttributedString {
-        var attributed = AttributedString(text)
-        for range in ranges {
-            // Short-term ranges may end inside a grapheme; skip anything that does not map rather than trap.
-            guard let target = Range(range, in: attributed) else { continue }
-            attributed[target].font = font.weight(.semibold)
-            if isSelected {
-                attributed[target].foregroundColor = .white
-                attributed[target].underlineStyle = .single
-            } else {
-                attributed[target].foregroundColor = .primary
-            }
-        }
-        return attributed
+        MatchHighlight.attributed(text, ranges: ranges, font: font, onAccent: isSelected)
     }
 
     // MARK: Background

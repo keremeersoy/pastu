@@ -18,6 +18,18 @@ func enableAccessibilityTree() {
 /// check what the panel shows, and press its buttons, without matching pixels or clicking at coordinates.
 @MainActor
 func accessibilityElement(containing text: String, in root: NSView) -> AnyObject? {
+    accessibilityElement(in: root) { $0.contains(text) }
+}
+
+/// Like `accessibilityElement(containing:in:)`, but for an element whose label, title or value is exactly `text`;
+/// tells a preview line apart from a row that merely includes the same words.
+@MainActor
+func accessibilityElement(exactly text: String, in root: NSView) -> AnyObject? {
+    accessibilityElement(in: root) { $0 == text }
+}
+
+@MainActor
+private func accessibilityElement(in root: NSView, where matches: (String) -> Bool) -> AnyObject? {
     func search(_ element: AnyObject, depth: Int) -> AnyObject? {
         guard depth < 40 else { return nil }
         // SwiftUI's nodes are plain NSObjects that implement the accessibility methods, so look them up dynamically.
@@ -25,7 +37,7 @@ func accessibilityElement(containing text: String, in root: NSView) -> AnyObject
         // its string there).
         let value = element.perform?(NSSelectorFromString("accessibilityValue"))?.takeUnretainedValue() as? String
         let strings = [element.accessibilityLabel?(), element.accessibilityTitle?(), value]
-        if strings.contains(where: { $0?.contains(text) == true }) { return element }
+        if strings.contains(where: { $0.map(matches) == true }) { return element }
         for child in element.accessibilityChildren?() ?? [] {
             if let found = search(child as AnyObject, depth: depth + 1) { return found }
         }

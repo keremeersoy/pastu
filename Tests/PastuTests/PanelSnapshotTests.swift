@@ -331,5 +331,124 @@ extension ShellTests {
         let edge = CGPoint(x: PanelMetrics.size.width / 2, y: 0.5)
         #expect(try color(in: image, atPoint: edge) != color(in: plain, atPoint: edge))
     }
+
+    // MARK: Preview
+
+    /// The preview's text, ranges and font are derived once per clip and query, not on every body evaluation.
+    @Test func previewContentIsBuiltOncePerClipAndQuery() throws {
+        let clip = StoredClip(
+            id: 4_242, text: String(repeating: "lorem ipsum ", count: 1_000) + "needle", sourceBundleIdentifier: nil,
+            firstCopiedAt: Date(), lastCopiedAt: Date(), copyCount: 1, isPinned: false, kind: .text
+        )
+        let before = PreviewContent.computations
+        let first = PreviewContent.cached(for: clip, query: "needle")
+        _ = PreviewContent.cached(for: clip, query: "needle")
+        #expect(PreviewContent.computations == before + 1)
+        #expect(first.scrollsToMatch)
+        _ = PreviewContent.cached(for: clip, query: "lorem")
+        #expect(PreviewContent.computations == before + 2)
+        #expect(!PreviewContent.cached(for: clip, query: "lorem").scrollsToMatch)
+    }
+
+    /// The scroll anchor starts at the match's line; a long line is cut at a space shortly before the match.
+    @Test func previewAnchorSplitsAtTheMatchLine() throws {
+        let text = "first line\nsecond line has the needle"
+        let match = try #require(text.range(of: "needle"))
+        let split = try #require(PreviewContent.anchorSplit(in: text, firstMatch: match.lowerBound))
+        #expect(text[..<split.headEnd] == "first line")
+        #expect(text[split.tailStart...] == "second line has the needle")
+        // On the first line, near the top: nothing to scroll to.
+        #expect(PreviewContent.anchorSplit(in: "the needle", firstMatch: "the needle".index("the needle".startIndex, offsetBy: 4)) == nil)
+
+        let long = String(repeating: "word ", count: 200) + "needle"
+        let deep = try #require(long.range(of: "needle"))
+        let cut = try #require(PreviewContent.anchorSplit(in: long, firstMatch: deep.lowerBound))
+        let gap = long.distance(from: cut.tailStart, to: deep.lowerBound)
+        #expect((120...130).contains(gap))
+        #expect(long[cut.headEnd] == " ")
+    }
+
+    private func appearanceName(_ appearance: NSAppearance.Name) -> String { appearance == .aqua ? "light" : "dark" }
+
+    /// Preview snapshots use the opaque Reduce Transparency shell: the offscreen capture does not blend glass
+    /// vibrancy, which would draw dark-mode text black on a see-through background.
+    private func renderPreview(
+        _ panel: PanelView, appearance: NSAppearance.Name
+    ) async throws -> (image: NSImage, content: NSView) {
+        try await renderWindow(panel.environment(\._accessibilityReduceTransparency, true), appearance: appearance)
+    }
+
+    /// A link clip shows its host as a heading and the full URL below it, both as their own lines.
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func previewRendersLinkParts(appearance: NSAppearance.Name) async throws {
+        let model = try sampleModel()
+        model.filter = .links
+        let link = try #require(model.selectedClip)
+        #expect(link.kind == .link)
+        let (image, content) = try await renderPreview(
+            PanelView(model: model, canAutoPaste: true, onSubmit: {}), appearance: appearance
+        )
+        save(image, name: "preview-link-\(appearanceName(appearance))")
+        #expect(accessibilityElement(exactly: "developer.apple.com", in: content) != nil)
+        #expect(accessibilityElement(exactly: "https://developer.apple.com/documentation/appkit/nspanel", in: content) != nil)
+        #expect(containsText("Safari", in: content))
+    }
+
+    /// Prose is set in the body font; only code-like text is monospaced. The metadata grid replaces the old header.
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func previewRendersProseInBodyFont(appearance: NSAppearance.Name) async throws {
+        let model = try sampleModel()
+        let notes = try #require(model.selectedClip) // pinned, so first
+        #expect(notes.sourceBundleIdentifier == "com.apple.Notes")
+        #expect(!PreviewPane.usesMonospace(for: notes))
+        let shell = StoredClip(
+            id: 99, text: "$ swift build\n$ swift test --filter PanelSnapshotTests", sourceBundleIdentifier: nil,
+            firstCopiedAt: Date(), lastCopiedAt: Date(), copyCount: 1, isPinned: false, kind: .text
+        )
+        #expect(PreviewPane.usesMonospace(for: shell))
+
+        let (image, content) = try await renderPreview(
+            PanelView(model: model, canAutoPaste: true, onSubmit: {}), appearance: appearance
+        )
+        save(image, name: "preview-text-\(appearanceName(appearance))")
+        for label in ["Source", "Copied", "Size", "Pinned"] {
+            #expect(accessibilityElement(exactly: label, in: content) != nil, "missing metadata label \(label)")
+        }
+        #expect(accessibilityElement(exactly: ClipFormatting.stats(notes.text), in: content) != nil)
+    }
+
+    /// A match past the 4,000-character cut: the preview shows a window around it with "…" markers on both ends.
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func previewRendersMatchBeyondLimit(appearance: NSAppearance.Name) async throws {
+        let store = try ClipStore()
+        let filler = String(repeating: "Some filler words that pad out a long clip.\n", count: 20)
+        let text = filler + "Opening paragraph that only the start of the clip shows.\n"
+            + String(repeating: filler, count: 10)
+            + "The deploy keychain rotates every Tuesday at noon.\n"
+            + String(repeating: filler, count: 10)
+        try store.insert(CapturedClip(text: text, sourceBundleIdentifier: "com.apple.TextEdit", date: Date()))
+        let model = ClipListModel(store: store)
+        model.query = "keychain"
+        #expect(model.selectedClip != nil)
+
+        let (image, content) = try await renderPreview(
+            PanelView(model: model, canAutoPaste: true, onSubmit: {}), appearance: appearance
+        )
+        save(image, name: "preview-match-beyond-limit-\(appearanceName(appearance))")
+        #expect(containsText("The deploy keychain rotates every Tuesday at noon.", in: content))
+        #expect(!containsText("Opening paragraph that only the start", in: content))
+        #expect(containsText("earlier characters", in: content))
+        #expect(containsText("more characters", in: content))
+    }
+
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func previewRendersPicture(appearance: NSAppearance.Name) async throws {
+        let (model, loader) = try pictureSample()
+        let (image, content) = try await renderPreview(
+            PanelView(model: model, canAutoPaste: true, onSubmit: {}, imageData: loader), appearance: appearance
+        )
+        save(image, name: "preview-picture-\(appearanceName(appearance))")
+        #expect(containsText("1440×900 ·", in: content))
+    }
 }
 }

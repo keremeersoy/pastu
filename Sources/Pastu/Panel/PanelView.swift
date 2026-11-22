@@ -3,7 +3,7 @@ import SwiftUI
 
 enum PanelMetrics {
     static let size = CGSize(width: 780, height: 460)
-    static let listWidth: CGFloat = 340
+    static let listWidth: CGFloat = 320
     /// Close to Spotlight's panel on macOS 26.
     static let cornerRadius: CGFloat = 22
     /// Gap between the shell edge and inner surfaces (rows, preview).
@@ -80,8 +80,7 @@ struct PanelView: View {
                 }
             }
 
-            Divider()
-
+            // No dividers between header, content and footer: spacing and the preview's own surface separate them.
             if model.clips.isEmpty {
                 Text(emptyMessage)
                     .foregroundStyle(.secondary)
@@ -89,12 +88,12 @@ struct PanelView: View {
             } else {
                 HStack(spacing: 0) {
                     list.frame(width: PanelMetrics.listWidth)
-                    Divider()
-                    PreviewPane(clip: model.selectedClip, imageData: imageData)
+                    // The list's own inset already provides the gap on the leading side.
+                    PreviewPane(clip: model.selectedClip, query: model.query, imageData: imageData)
+                        .padding([.vertical, .trailing], PanelMetrics.contentInset)
                 }
             }
 
-            Divider()
             HintFooter(canAutoPaste: canAutoPaste, notice: model.notice)
         }
         .frame(width: PanelMetrics.size.width, height: PanelMetrics.size.height)
