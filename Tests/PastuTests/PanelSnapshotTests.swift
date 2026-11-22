@@ -241,6 +241,80 @@ extension ShellTests {
         #expect(try alpha(in: image, atPoint: headerCenter) == 1)
     }
 
+    /// The query sits deep inside a long clip, so its row shows a snippet around the match instead of "App · time".
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func panelRendersSearchSnippet(appearance: NSAppearance.Name) async throws {
+        let store = try ClipStore()
+        let now = Date()
+        let filler = String(repeating: "Some filler words that pad out a long clip. ", count: 30)
+        try store.insert(CapturedClip(
+            text: filler + "The deploy keychain rotates every Tuesday at noon. " + filler,
+            sourceBundleIdentifier: "com.apple.TextEdit", date: now.addingTimeInterval(-60)
+        ))
+        try store.insert(CapturedClip(
+            text: "Log file rotates nightly", sourceBundleIdentifier: "com.apple.Terminal", date: now.addingTimeInterval(-3_600)
+        ))
+        let model = ClipListModel(store: store)
+        model.query = "rotates"
+        let selected = try #require(model.selectedClip)
+        // Guards the setup: the match must be outside the title, or the row would not need a snippet.
+        #expect(!ClipFormatting.rowTitle(selected.text).contains("rotates"))
+        #expect(SearchHighlighter.snippet(of: model.query, in: selected.text) != nil)
+
+        let (image, content) = try await renderWindow(
+            PanelView(model: model, canAutoPaste: true, onSubmit: {}), appearance: appearance
+        )
+        save(image, name: "panel-search-snippet-\(appearance == .aqua ? "light" : "dark")")
+        // Each row is one VoiceOver element labelled by the PastuCore builder.
+        #expect(containsText("Text from TextEdit, 1 minute ago", in: content))
+    }
+
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func panelRendersWithCommandHeld(appearance: NSAppearance.Name) async throws {
+        let view = PanelView(
+            model: try sampleModel(), canAutoPaste: true, onSubmit: {},
+            commandKeys: CommandKeyMonitor(isCommandHeld: true)
+        )
+        let image = try await render(view, appearance: appearance)
+        save(image, name: "panel-command-held-\(appearance == .aqua ? "light" : "dark")")
+        #expect(image.size == PanelMetrics.size)
+    }
+
+    /// Rows on their own: selected (pinned), hovered, plain and a picture, in the list's width. Drawn on the opaque
+    /// Reduce Transparency shell because the offscreen capture does not blend glass vibrancy, which would show the
+    /// hover fill as solid white.
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func panelRendersSelectedAndHoverRows(appearance: NSAppearance.Name) async throws {
+        let model = try sampleModel()
+        let (pictures, loader) = try pictureSample()
+        let clips = Array(model.clips.prefix(4)) + Array(pictures.clips.prefix(1))
+        let rows = VStack(spacing: 2) {
+            // By position: the two stores both number their clips from 1.
+            ForEach(Array(clips.enumerated()), id: \.offset) { index, clip in
+                ClipRow(
+                    clip: clip, isSelected: index == 0, shortcutDigit: index + 1, showsShortcut: index == 0,
+                    query: "", imageData: loader, isHovered: index == 1
+                )
+            }
+            Spacer()
+        }
+        .padding(PanelMetrics.contentInset)
+        .frame(width: PanelMetrics.listWidth)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(width: PanelMetrics.size.width, height: PanelMetrics.size.height)
+        .panelShell()
+        .environment(\._accessibilityReduceTransparency, true)
+        let (image, content) = try await renderWindow(rows, appearance: appearance)
+        save(image, name: "panel-rows-selected-hover-\(appearance == .aqua ? "light" : "dark")")
+        // Pinned clips sort first, so row 0 (selected) is the pinned Notes clip.
+        let selected = try #require(accessibilityElement(containing: "Text from Notes", in: content))
+        #expect(selected.accessibilityLabel?()?.hasSuffix("pinned") == true)
+        #expect(selected.isAccessibilitySelected?() == true)
+        let other = try #require(accessibilityElement(containing: "Text from Terminal", in: content))
+        #expect(other.isAccessibilitySelected?() != true)
+        #expect(containsText("1440 by 900", in: content))
+    }
+
     @Test func panelRendersWithIncreasedContrast() async throws {
         // Over the opaque Reduce Transparency fill the stroke is the only difference, so compare the two.
         func shell(_ contrast: ColorSchemeContrast) throws -> some View {

@@ -16,6 +16,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let onResume: () -> Void
     private let openAccessibilitySettings: () -> Void
     let panel = ClipPanel(size: PanelController.size)
+    /// Watches ⌘ only while the panel is visible (started in `show`, stopped in `hide`).
+    let commandKeys = CommandKeyMonitor()
 
     var isVisible: Bool { panel.isVisible }
 
@@ -68,13 +70,15 @@ final class PanelController: NSObject, NSWindowDelegate {
                 self?.hide()
                 self?.openAccessibilitySettings()
             },
-            imageData: imageData
+            imageData: imageData,
+            commandKeys: commandKeys
         ))
         // The shadow of a borderless, transparent window is traced from its drawn pixels: draw the
         // rounded shell first, then recompute the shadow so it follows the corners, not the square frame.
         panel.displayIfNeeded()
         panel.invalidateShadow()
         panel.setFrameOrigin(origin(on: screenUnderMouse()))
+        commandKeys.start()
         appear()
     }
 
@@ -114,6 +118,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func hide() {
+        commandKeys.stop()
         panel.orderOut(nil)
     }
 

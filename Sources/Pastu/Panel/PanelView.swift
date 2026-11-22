@@ -24,6 +24,8 @@ struct PanelView: View {
     var onOpenAccessibilitySettings: () -> Void = {}
     /// Loads a picture clip's PNG bytes; the default shows a placeholder.
     var imageData: (Int64) -> Data? = { _ in nil }
+    /// Whether ⌘ is held (all nine badges show). The controller starts and stops it with the panel.
+    var commandKeys = CommandKeyMonitor()
 
     @FocusState private var searchFocused: Bool
     /// Set by "Resume" so the banner goes away at once; the view is rebuilt (and `isPaused` re-read) on every show.
@@ -113,18 +115,28 @@ struct PanelView: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(model.clips.enumerated()), id: \.element.id) { index, clip in
+                        let isSelected = index == model.selectedIndex
                         ClipRow(
-                            clip: clip, isSelected: index == model.selectedIndex,
-                            shortcutDigit: index < 9 ? index + 1 : nil, imageData: imageData
+                            clip: clip, isSelected: isSelected,
+                            shortcutDigit: index < 9 ? index + 1 : nil,
+                            showsShortcut: isSelected || commandKeys.isCommandHeld,
+                            query: model.query, imageData: imageData
                         )
                             .id(clip.id)
                     }
                 }
-                .padding(8)
+                .padding(PanelMetrics.contentInset)
             }
             .panelScrollEdges()
             .onChange(of: model.selectedIndex) {
                 if let id = model.selectedClip?.id { proxy.scrollTo(id) }
+            }
+            // Focus stays in the search field, so VoiceOver would not notice the selection moving: say it.
+            // Keyed on the clip, not the index, so a new query that puts a different clip first is announced too.
+            // `onChange` does not fire for the initial value, so opening the panel stays quiet.
+            .onChange(of: model.selectedClip?.id) {
+                guard let clip = model.selectedClip else { return }
+                AccessibilityNotification.Announcement(ClipRow.accessibilityLabel(for: clip, imageData: imageData)).post()
             }
         }
     }

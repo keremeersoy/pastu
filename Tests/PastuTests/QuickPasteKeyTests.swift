@@ -352,6 +352,39 @@ extension ShellTests {
         #expect(model.notice?.contains("unknown") == true)
     }
 
+    private func flagsEvent(_ modifiers: NSEvent.ModifierFlags, window: NSWindow) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .flagsChanged, location: .zero, modifierFlags: modifiers,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil,
+            characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 55 // left ⌘
+        )!
+    }
+
+    /// Holding ⌘ shows all nine badges; the monitor only exists while the panel is open.
+    @Test func holdingCommandIsTrackedOnlyWhileThePanelIsOpen() async throws {
+        let (controller, _, _) = try controllerWithClips(app: nil)
+        #expect(!controller.commandKeys.isMonitoring)
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        #expect(controller.commandKeys.isMonitoring)
+
+        NSApp.sendEvent(flagsEvent(.command, window: controller.panel))
+        await pump(0.2)
+        #expect(controller.commandKeys.isCommandHeld)
+        NSApp.sendEvent(flagsEvent([], window: controller.panel))
+        await pump(0.2)
+        #expect(!controller.commandKeys.isCommandHeld)
+
+        NSApp.sendEvent(flagsEvent(.command, window: controller.panel))
+        await pump(0.2)
+        controller.hide()
+        // Hiding while ⌘ is down must not leave the badges on for the next open, nor a monitor behind.
+        #expect(!controller.commandKeys.isCommandHeld)
+        #expect(!controller.commandKeys.isMonitoring)
+    }
+
     @Test func plainIStaysInTheSearchField() async throws {
         let (controller, _, ignored) = try controllerWithClips(app: "com.example.vault")
         controller.show()
