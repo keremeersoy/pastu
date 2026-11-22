@@ -38,6 +38,18 @@ jobs:
       # Shell tests open real AppKit windows; this needs a GUI login session. Hosted macOS runners provide one
       # (verified: all tests passed on macos-26 with Xcode 26.6 on 2026-11-21).
       - name: Test
-        run: swift test
+        shell: bash   # -eo pipefail, so a failing `swift test` is not hidden by `tee`
+        run: |
+          swift test 2>&1 | tee swift-test.log
+          # A test process that exits 0 early (say, code under test calling exit(0)) would pass silently.
+          # Require the Swift Testing summary of both test runs (PastuTests and PastuCoreTests each print one)
+          # and a floor on the total, so a run that skipped most tests fails too. Raise the floor as tests grow.
+          summary='Test run with [0-9]+ tests? in [0-9]+ suites? passed'
+          runs="$(grep -cE "$summary" swift-test.log || true)"
+          total="$({ grep -oE "$summary" swift-test.log || true; } | awk '{ n += $4 } END { print n + 0 }')"
+          echo "Swift Testing: $runs passing runs, $total tests"
+          if [ "$runs" -ne 2 ] || [ "$total" -lt 330 ]; then
+            echo "::error::Expected 2 passing Swift Testing runs with at least 330 tests in total"; exit 1
+          fi
       - name: Build app bundle (ad-hoc signed)
         run: ./scripts/build-app.sh

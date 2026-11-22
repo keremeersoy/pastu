@@ -42,7 +42,17 @@ jobs:
           grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG.md has no [$VERSION] section"; exit 1; }
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Test
-        run: swift test
+        shell: bash   # -eo pipefail, so a failing `swift test` is not hidden by `tee`
+        run: |
+          swift test 2>&1 | tee swift-test.log
+          # Same check as in ci.yml, see the comment there: both Swift Testing summaries, at least 330 tests.
+          summary='Test run with [0-9]+ tests? in [0-9]+ suites? passed'
+          runs="$(grep -cE "$summary" swift-test.log || true)"
+          total="$({ grep -oE "$summary" swift-test.log || true; } | awk '{ n += $4 } END { print n + 0 }')"
+          echo "Swift Testing: $runs passing runs, $total tests"
+          if [ "$runs" -ne 2 ] || [ "$total" -lt 330 ]; then
+            echo "::error::Expected 2 passing Swift Testing runs with at least 330 tests in total"; exit 1
+          fi
       - name: Build app bundle (ad-hoc signed)
         run: VERSION="${{ steps.version.outputs.version }}" ./scripts/build-app.sh
       - name: Package
