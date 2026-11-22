@@ -186,6 +186,8 @@ extension ShellTests {
         controller.show()
         await pump()
         defer { controller.hide() }
+        // Without focus the key goes nowhere and the test would pass without testing anything.
+        try #require(await searchFieldHasFocus(controller.panel))
 
         NSApp.sendEvent(keyEvent("\u{7F}", keyCode: 51, modifiers: [], window: controller.panel))
         await pump(0.2)
@@ -218,6 +220,51 @@ extension ShellTests {
         #expect(handled)
         #expect(deletes == 1)
     }
+    // MARK: Focus on open
+
+    /// Rarely, SwiftUI's initial focus request did nothing: the panel was key but its first responder stayed the
+    /// window itself, so typing went nowhere. Puts the panel in exactly that state and lets it become key.
+    /// Calls `becomeKey` itself, so the test does not depend on whether the desktop grants key status.
+    @Test func becomingKeyWithNothingFocusedFocusesTheSearchField() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let (controller, model) = try controllerWithClips(3)
+        controller.show()
+        defer { controller.hide() }
+        let panel = controller.panel
+        await pump()
+        panel.makeFirstResponder(nil)
+        await pump(0.1)
+        try #require(panel.firstResponder === panel)
+
+        panel.becomeKey()
+        await pump(0.1)
+        let editor = try #require(panel.firstResponder as? NSTextView)
+        // SwiftUI knows about it too: typing reaches the query and the panel's key handling works.
+        editor.insertText("clip 1", replacementRange: NSRange(location: NSNotFound, length: 0))
+        await pump(0.1)
+        #expect(model.query == "clip 1")
+        panel.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
+        await pump(0.1)
+        #expect(model.filter == .text)
+    }
+
+    /// Only a missing focus is repaired: focus another view has is left alone.
+    @Test func becomingKeyDoesNotMoveExistingFocus() async throws {
+        let panel = ClipPanel(size: NSSize(width: 200, height: 100))
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
+        let first = NSTextField(string: "first"), second = NSTextField(string: "second")
+        content.addSubview(first)
+        content.addSubview(second)
+        panel.contentView = content
+        panel.makeFirstResponder(second)
+        let focused = panel.firstResponder
+        try #require(focused !== panel)
+        panel.becomeKey()
+        await pump(0.1)
+        #expect(panel.firstResponder === focused)
+    }
+
     // MARK: Shortcuts overlay
 
     /// ⌘/ is keyCode 44. The overlay must not take focus: Return and typing still go to the search field.
