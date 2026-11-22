@@ -395,5 +395,240 @@ extension ShellTests {
         await pump(0.2)
         #expect(ignored.bundleIdentifiers.isEmpty)
     }
+
+    // MARK: Mouse on the rows
+
+    /// A controller with three text clips (rows newest first: "newest", "middle", "oldest") that records what it pastes.
+    private func controllerForMouse(app: String? = "com.example.editor") throws
+        -> (PanelController, ClipListModel, IgnoredApps, picked: () -> [String], copied: () -> [String]) {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        enableAccessibilityTree()
+        let store = try ClipStore()
+        for (i, text) in ["oldest", "middle", "newest"].enumerated() {
+            try store.insert(CapturedClip(text: text, sourceBundleIdentifier: app, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        let model = ClipListModel(store: store)
+        let ignored = IgnoredApps()   // in memory
+        var picked: [String] = []
+        var copied: [String] = []
+        let controller = PanelController(
+            model: model, canAutoPaste: { true }, ignoredApps: ignored, onCopy: { copied.append($0.text) }
+        ) { picked.append($0.text) }
+        return (controller, model, ignored, { picked }, { copied })
+    }
+
+    /// The centre of row `index` (0 = top), in window coordinates. Rows are found through the accessibility tree:
+    /// the list is the first scroll area and each row one element in it, with its frame in screen coordinates.
+    private func rowCenter(_ index: Int, in panel: NSWindow) throws -> NSPoint {
+        let content = try #require(panel.contentView)
+        let list = try #require((content.accessibilityChildren() ?? []).first {
+            ($0 as AnyObject).accessibilityRole?() == .scrollArea
+        } as AnyObject?)
+        let rows = try #require((list.accessibilityChildren?() ?? []).first as AnyObject?).accessibilityChildren?() ?? []
+        try #require(rows.indices.contains(index), "only \(rows.count) rows")
+        let frame = try #require((rows[index] as AnyObject).accessibilityFrame?())
+        return panel.convertPoint(fromScreen: NSPoint(x: frame.midX, y: frame.midY))
+    }
+
+    private func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint, clickCount: Int, window: NSWindow) -> NSEvent {
+        NSEvent.mouseEvent(
+            with: type, location: point, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil,
+            eventNumber: 0, clickCount: clickCount, pressure: type == .leftMouseUp ? 0 : 1
+        )!
+    }
+
+    /// One press and release; a double click is the second pair with clickCount 2, as AppKit reports it.
+    private func click(at point: NSPoint, clickCount: Int = 1, in window: NSWindow) {
+        NSApp.sendEvent(mouseEvent(.leftMouseDown, at: point, clickCount: clickCount, window: window))
+        NSApp.sendEvent(mouseEvent(.leftMouseUp, at: point, clickCount: clickCount, window: window))
+    }
+
+    @Test func clickingARowKeepsSearchFieldFocused() async throws {
+        let (controller, model, _, picked, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        click(at: try rowCenter(1, in: controller.panel), in: controller.panel)
+        await pump(0.2)
+        #expect(model.selectedIndex == 1)
+        #expect(controller.isVisible)
+        #expect(controller.panel.firstResponder is NSTextView, "first responder: \(String(describing: controller.panel.firstResponder))")
+        #expect(picked().isEmpty)
+    }
+
+    /// Selection must follow the click at once, not after the double-click interval (about 0.5 s by default).
+    @Test func singleClickSelectsWithoutWaitingForADoubleClick() async throws {
+        let (controller, model, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        try #require(NSEvent.doubleClickInterval > 0.15)
+
+        click(at: try rowCenter(1, in: controller.panel), in: controller.panel)
+        await pump(0.05)
+        #expect(model.selectedIndex == 1)
+    }
+
+    @Test func doubleClickSubmits() async throws {
+        let (controller, _, _, picked, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        let point = try rowCenter(2, in: controller.panel)
+        click(at: point, clickCount: 1, in: controller.panel)
+        click(at: point, clickCount: 2, in: controller.panel)
+        await pump(0.3)
+        #expect(picked() == ["oldest"])
+        #expect(!controller.isVisible)
+    }
+
+    /// The row's context menu as AppKit gets it for a right click there (`menu(for:)` on the hosting view), without
+    /// popping it up: a real menu runs its own event loop, whose wake-up can stop the test runner's run loop and end
+    /// the whole test process early with exit 0 (the same trap as pressing a segment, see `accessibilityPress`).
+    private func contextMenu(onRow row: Int, in panel: NSWindow) throws -> NSMenu {
+        let point = try rowCenter(row, in: panel)
+        let event = try #require(NSEvent.mouseEvent(
+            with: .rightMouseDown, location: point, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil,
+            eventNumber: 0, clickCount: 1, pressure: 1
+        ))
+        return try #require(panel.contentView?.menu(for: event), "no context menu on row \(row)")
+    }
+
+    /// Picks the item titled `title`, the way choosing it in the open menu would.
+    private func choose(_ title: String, in menu: NSMenu) throws {
+        let index = try #require(menu.items.firstIndex { $0.title == title }, "no \(title) in \(menu.items.map(\.title))")
+        try #require(menu.items[index].isEnabled)
+        menu.performActionForItem(at: index)
+    }
+
+    private func titles(_ menu: NSMenu) -> [String] {
+        menu.items.filter { !$0.isSeparatorItem }.map(\.title)
+    }
+
+    @Test func rowContextMenuOffersTheRowActions() async throws {
+        let (controller, _, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        let menu = try contextMenu(onRow: 1, in: controller.panel)
+        // The app is not installed, so the menu names it by its bundle identifier, as the ⌘I notice does.
+        #expect(titles(menu) == ["Paste", "Copy", "Pin", "Delete", "Ignore “com.example.editor”"])
+        #expect(menu.items.allSatisfy { $0.isSeparatorItem || $0.isEnabled })
+        #expect(controller.isVisible)
+        #expect(controller.panel.firstResponder is NSTextView)
+    }
+
+    @Test func pinFromTheContextMenuKeepsThePanelOpen() async throws {
+        let (controller, model, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        try choose("Pin", in: try contextMenu(onRow: 2, in: controller.panel))
+        await pump(0.2)
+        #expect(model.clips.first?.text == "oldest")
+        #expect(model.clips.first?.isPinned == true)
+        #expect(controller.isVisible)
+        // A pinned row offers the opposite.
+        #expect(titles(try contextMenu(onRow: 0, in: controller.panel)).contains("Unpin"))
+    }
+
+    @Test func deleteFromTheContextMenuKeepsThePanelOpen() async throws {
+        let (controller, model, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        try choose("Delete", in: try contextMenu(onRow: 1, in: controller.panel))
+        await pump(0.2)
+        #expect(model.clips.map(\.text) == ["newest", "oldest"])
+        #expect(controller.isVisible)
+    }
+
+    @Test func ignoreFromTheContextMenuKeepsThePanelOpen() async throws {
+        let (controller, model, ignored, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        try choose("Ignore “com.example.editor”", in: try contextMenu(onRow: 1, in: controller.panel))
+        await pump(0.2)
+        #expect(ignored.bundleIdentifiers == ["com.example.editor"])
+        #expect(model.notice?.contains("Ignoring") == true)
+        #expect(controller.isVisible)
+    }
+
+    @Test func ignoreIsDisabledWhenTheSourceAppIsUnknown() async throws {
+        let (controller, _, _, _, _) = try controllerForMouse(app: nil)
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        let menu = try contextMenu(onRow: 1, in: controller.panel)
+        let ignore = try #require(menu.items.first { $0.title.hasPrefix("Ignore") })
+        #expect(ignore.isEnabled == false)
+    }
+
+    @Test func pasteFromTheContextMenuPastesThatRow() async throws {
+        let (controller, _, _, picked, copied) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        try choose("Paste", in: try contextMenu(onRow: 1, in: controller.panel))
+        await pump(0.2)
+        #expect(picked() == ["middle"])
+        #expect(copied().isEmpty)
+        #expect(!controller.isVisible)
+    }
+
+    /// Copy is Paste without ⌘V: the panel closes and the clip goes to the copy path, never to the paste path.
+    @Test func copyFromTheContextMenuCopiesWithoutPasting() async throws {
+        let (controller, _, _, picked, copied) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+
+        try choose("Copy", in: try contextMenu(onRow: 1, in: controller.panel))
+        await pump(0.2)
+        #expect(copied() == ["middle"])
+        #expect(picked().isEmpty)
+        #expect(!controller.isVisible)
+    }
+
+    /// A right click's menu runs its tracking loop inside the panel's `sendEvent`. If the panel loses key status in
+    /// there (the test steals it with another window), it must not close, and it takes key status back afterwards
+    /// so typing still goes to the search field. Outside a context click, resigning key still closes the panel.
+    @Test func losingKeyDuringAContextClickKeepsThePanelOpenAndKey() async throws {
+        let (controller, _, _, _, _) = try controllerForMouse()
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        let other = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 60, height: 60), styleMask: [.titled], backing: .buffered, defer: false
+        )
+        other.isReleasedWhenClosed = false
+        defer { other.orderOut(nil) }
+
+        controller.panel.handlingContextClick {
+            other.makeKeyAndOrderFront(nil)
+            #expect(!controller.panel.isKeyWindow)
+        }
+        #expect(controller.isVisible)
+        #expect(controller.panel.isKeyWindow)
+        #expect(await searchFieldHasFocus(controller.panel))
+
+        other.makeKeyAndOrderFront(nil)
+        await pump(0.1)
+        #expect(!controller.isVisible)
+    }
 }
 }
+

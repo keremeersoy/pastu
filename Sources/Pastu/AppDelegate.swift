@@ -43,7 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ignoredApps: ignoredApps,
                 imageData: { id in (try? store.imageData(id: id)) ?? nil },
                 isPaused: { [recording] in recording.isPaused },
-                onResume: { [weak self] in self?.statusMenu.resumeRecording() }
+                onResume: { [weak self] in self?.statusMenu.resumeRecording() },
+                onCopy: { [weak self] clip in self?.pasteCoordinator.copy(clip) }
             ) { [weak self] clip in
                 self?.pasteCoordinator.paste(clip)
             }

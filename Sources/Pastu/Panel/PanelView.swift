@@ -18,6 +18,8 @@ struct PanelView: View {
     var isPaused: Bool = false
     let onSubmit: () -> Void
     var onIgnoreApp: () -> Void = {}
+    /// The row menu's "Copy": the selected clip goes on the clipboard without ⌘V.
+    var onCopyOnly: () -> Void = {}
     /// The paused banner's "Resume" button.
     var onResume: () -> Void = {}
     /// The Accessibility banner's "Enable…" button.
@@ -110,6 +112,28 @@ struct PanelView: View {
         }
     }
 
+    /// Selects the row showing `clip`, then runs the action on the selection, so mouse actions go through the same
+    /// paths as their keyboard shortcuts. Looked up by id at the time of the action: the list can reload while a
+    /// menu is open (a new copy arrives), which would make a captured row index point at another clip.
+    private func act(on clip: StoredClip, _ action: () -> Void) {
+        guard let row = model.clips.firstIndex(where: { $0.id == clip.id }), model.select(row: row) else { return }
+        action()
+    }
+
+    /// Paste and Copy close the panel; Pin, Delete and Ignore keep it open, like ⌘P, ⌘⌫ and ⌘I.
+    @ViewBuilder
+    private func rowMenu(for clip: StoredClip) -> some View {
+        Button("Paste") { act(on: clip, onSubmit) }
+        Button("Copy") { act(on: clip, onCopyOnly) }
+        Divider()
+        Button(clip.isPinned ? "Unpin" : "Pin") { act(on: clip, model.togglePinSelected) }
+        Button("Delete") { act(on: clip, model.deleteSelected) }
+        Divider()
+        let app = clip.sourceBundleIdentifier.map { AppLookup.name(for: $0) ?? $0 }
+        Button(app.map { "Ignore “\($0)”" } ?? "Ignore App") { act(on: clip, onIgnoreApp) }
+            .disabled(app == nil)
+    }
+
     private var list: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -123,6 +147,12 @@ struct PanelView: View {
                             query: model.query, snippet: model.rowSnippet(for: clip), imageData: imageData
                         )
                             .id(clip.id)
+                            // Select on the first click at once. An exclusive `onTapGesture(count: 2)` before
+                            // `onTapGesture` would hold the single tap back for the double-click interval (~0.5 s),
+                            // so the double tap runs alongside instead; its first click has already selected the row.
+                            .onTapGesture { act(on: clip) {} }
+                            .simultaneousGesture(TapGesture(count: 2).onEnded { act(on: clip, onSubmit) })
+                            .contextMenu { rowMenu(for: clip) }
                     }
                 }
                 .padding(PanelMetrics.contentInset)

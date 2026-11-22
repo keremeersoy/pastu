@@ -35,6 +35,27 @@ final class ClipPanel: NSPanel {
         return super.performKeyEquivalent(with: event)
     }
 
+    /// Called after a right click (or ⌃-click) was handled, with its context menu closed again.
+    var onContextClickEnded: (() -> Void)?
+    /// True while a right click is being handled. Its context menu runs its tracking loop synchronously inside
+    /// `sendEvent`, so this spans the whole time the menu is open.
+    private(set) var isHandlingContextClick = false
+
+    override func sendEvent(_ event: NSEvent) {
+        let isContextClick = event.type == .rightMouseDown
+            || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+        guard isContextClick else { return super.sendEvent(event) }
+        handlingContextClick { super.sendEvent(event) }
+    }
+
+    /// Runs `body` as a context click: losing key status inside it is the menu's doing, not the user leaving.
+    func handlingContextClick(_ body: () -> Void) {
+        isHandlingContextClick = true
+        body()
+        isHandlingContextClick = false
+        onContextClickEnded?()
+    }
+
     /// Esc.
     override func cancelOperation(_ sender: Any?) {
         onCancel?()

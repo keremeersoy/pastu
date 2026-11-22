@@ -15,6 +15,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let isPaused: () -> Bool
     private let onResume: () -> Void
     private let openAccessibilitySettings: () -> Void
+    private let onCopy: (StoredClip) -> Void
     let panel = ClipPanel(size: PanelController.size)
     /// Watches ⌘ only while the panel is visible (started in `show`, stopped in `hide`).
     let commandKeys = CommandKeyMonitor()
@@ -26,6 +27,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// - Parameter isPaused: whether recording is paused; read each time the panel opens.
     /// - Parameter onResume: the paused banner's "Resume" button.
     /// - Parameter openAccessibilitySettings: the Accessibility banner's "Enable…" button; the panel hides first.
+    /// - Parameter onCopy: the row menu's "Copy"; called after the panel closed, like `onSelect` but without ⌘V.
     init(
         model: ClipListModel,
         canAutoPaste: @escaping () -> Bool,
@@ -34,6 +36,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         isPaused: @escaping () -> Bool = { false },
         onResume: @escaping () -> Void = {},
         openAccessibilitySettings: @escaping () -> Void = SystemSettings.openAccessibility,
+        onCopy: @escaping (StoredClip) -> Void = { _ in },
         onSelect: @escaping (StoredClip) -> Void
     ) {
         self.model = model
@@ -43,11 +46,13 @@ final class PanelController: NSObject, NSWindowDelegate {
         self.isPaused = isPaused
         self.onResume = onResume
         self.openAccessibilitySettings = openAccessibilitySettings
+        self.onCopy = onCopy
         self.onSelect = onSelect
         super.init()
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.hide() }
         panel.onDeleteSelected = { [weak self] in self?.model.deleteSelected() }
+        panel.onContextClickEnded = { [weak self] in self?.reclaimKeyAfterContextMenu() }
     }
 
     func toggle() {
@@ -64,6 +69,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             isPaused: isPaused(),
             onSubmit: { [weak self] in self?.submit() },
             onIgnoreApp: { [weak self] in self?.ignoreSelectedApp() },
+            onCopyOnly: { [weak self] in self?.copySelected() },
             onResume: onResume,
             onOpenAccessibilitySettings: { [weak self] in
                 // Hide first: the floating panel would otherwise cover System Settings.
@@ -117,13 +123,31 @@ final class PanelController: NSObject, NSWindowDelegate {
         if let clip { onSelect(clip) }
     }
 
+    /// The row menu's "Copy": the same as `submit` but the clip only goes on the clipboard.
+    private func copySelected() {
+        let clip = model.selectedClip
+        hide()
+        if let clip { onCopy(clip) }
+    }
+
     func hide() {
         commandKeys.stop()
         panel.orderOut(nil)
     }
 
+    /// Clicking away closes the panel. A row's context menu is the exception: if its tracking loop takes key status,
+    /// closing here would throw away a Pin, Delete or Ignore the user is about to choose.
     func windowDidResignKey(_ notification: Notification) {
+        guard !panel.isHandlingContextClick else { return }
         hide()
+    }
+
+    /// After a row menu closed with the panel still open (Pin, Delete, Ignore, or dismissed), typing must go to the
+    /// search field again. `makeKey` on the non-activating panel does not activate Pastu, so the app the user came
+    /// from stays frontmost and still receives the ⌘V.
+    private func reclaimKeyAfterContextMenu() {
+        guard panel.isVisible, !panel.isKeyWindow else { return }
+        panel.makeKey()
     }
 
     private func screenUnderMouse() -> NSScreen? {
