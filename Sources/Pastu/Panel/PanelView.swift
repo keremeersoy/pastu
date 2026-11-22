@@ -48,14 +48,9 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             SearchHeader(query: Bindable(model).query, filter: Bindable(model).filter, focused: $searchFocused)
-                .onKeyPress(keys: [.upArrow]) { press in
-                    if press.modifiers.contains(.command) { model.moveToStart() } else { model.moveSelection(by: -1) }
-                    return .handled
-                }
-                .onKeyPress(keys: [.downArrow]) { press in
-                    if press.modifiers.contains(.command) { model.moveToEnd() } else { model.moveSelection(by: 1) }
-                    return .handled
-                }
+                // ⌘↑ and ⌘↓ never get here: `ClipPanel.performKeyEquivalent` handles them.
+                .onKeyPress(.upArrow) { model.moveSelection(by: -1); return .handled }
+                .onKeyPress(.downArrow) { model.moveSelection(by: 1); return .handled }
                 .onKeyPress(.home) { model.moveToStart(); return .handled }
                 .onKeyPress(.end) { model.moveToEnd(); return .handled }
                 .onKeyPress(.pageUp) { model.movePage(-1, rowsPerPage: PanelMetrics.rowsPerPage); return .handled }
@@ -119,7 +114,7 @@ struct PanelView: View {
             HintFooter(canAutoPaste: canAutoPaste, notice: model.notice, showsShortcuts: Bindable(model).showsShortcuts)
         }
         .overlay {
-            // Over the content area, not the whole shell; it cannot take focus (no focusable views inside).
+            // Centered over the whole panel, header and footer included; it cannot take focus (no focusable views inside).
             if model.showsShortcuts {
                 ShortcutsOverlay().transition(.opacity)
             }

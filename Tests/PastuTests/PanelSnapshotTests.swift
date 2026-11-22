@@ -503,12 +503,12 @@ extension ShellTests {
         let model = try sampleModel()
         let notes = try #require(model.selectedClip) // pinned, so first
         #expect(notes.sourceBundleIdentifier == "com.apple.Notes")
-        #expect(!PreviewPane.usesMonospace(for: notes))
+        #expect(!PreviewContent(clip: notes, query: "").usesMonospace)
         let shell = StoredClip(
             id: 99, text: "$ swift build\n$ swift test --filter PanelSnapshotTests", sourceBundleIdentifier: nil,
             firstCopiedAt: Date(), lastCopiedAt: Date(), copyCount: 1, isPinned: false, kind: .text
         )
-        #expect(PreviewPane.usesMonospace(for: shell))
+        #expect(PreviewContent(clip: shell, query: "").usesMonospace)
 
         let (image, content) = try await renderPreview(
             PanelView(model: model, canAutoPaste: true, onSubmit: {}), appearance: appearance

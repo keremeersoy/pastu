@@ -13,7 +13,7 @@ struct EmptyState: View {
                     ContentUnavailableView.search(text: query)
                         .frame(height: 90)
                     if filter != .all {
-                        Text("Searching \(Self.name(of: filter)) only. Press Tab to change.")
+                        Text("Searching \(filter.title) only. Press Tab to change.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -34,14 +34,5 @@ struct EmptyState: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private static func name(of filter: ClipFilter) -> String {
-        switch filter {
-        case .all: "All"
-        case .text: "Text"
-        case .links: "Links"
-        case .images: "Images"
-        }
     }
 }

@@ -8,12 +8,6 @@ struct PreviewPane: View {
     let query: String
     let imageData: (Int64) -> Data?
 
-    /// Code-like text (terminal or editor source, or code signals in the text) is set monospaced; prose uses `.body`.
-    /// Only the start of the text is inspected, so this is cheap for any clip.
-    static func usesMonospace(for clip: StoredClip) -> Bool {
-        clip.kind == .text && ClipFormatting.looksLikeCode(clip.text, sourceBundleIdentifier: clip.sourceBundleIdentifier)
-    }
-
     var body: some View {
         Group {
             if let clip {
@@ -223,6 +217,7 @@ struct PreviewContent {
 
         let preview = ClipFormatting.previewText(clip.text, around: query)
         let shown = preview.text
+        // Code-like text (terminal or editor source, or code signals in the text) is set monospaced; prose uses `.body`.
         let monospace = ClipFormatting.looksLikeCode(shown, sourceBundleIdentifier: clip.sourceBundleIdentifier)
         let font: Font = monospace ? .system(.body, design: .monospaced) : .body
         let ranges = SearchHighlighter.ranges(of: query, in: shown)

@@ -87,6 +87,8 @@ final class ClipPanel: NSPanel {
     /// AppKit sends a chosen item's action before the menu call returns, so it is seen here.
     func handlingContextClick(_ body: () -> Void) {
         var choseMenuItem = false
+        // `object: nil` on purpose: the panel does not own the menu SwiftUI builds, and an item chosen in a submenu is
+        // sent by that submenu. Only one menu tracks at a time, so it cannot be somebody else's.
         let observer = NotificationCenter.default.addObserver(
             forName: NSMenu.didSendActionNotification, object: nil, queue: nil
         ) { _ in
