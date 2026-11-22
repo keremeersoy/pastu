@@ -129,7 +129,7 @@ struct PanelView: View {
         Button("Delete") {
             act(on: clip) {
                 model.deleteSelected()
-                PanelCaches.purge()
+                PanelCaches.forget(clip.id)
             }
         }
         Divider()

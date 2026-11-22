@@ -54,8 +54,9 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.hide() }
         panel.onDeleteSelected = { [weak self] in
-            self?.model.deleteSelected()
-            PanelCaches.purge()
+            guard let self, let id = model.selectedClip?.id else { return }
+            model.deleteSelected()
+            PanelCaches.forget(id)
         }
         panel.onContextClickEnded = { [weak self] chose in self?.contextClickEnded(choseMenuItem: chose) }
     }
@@ -67,6 +68,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     func show() {
         model.query = ""
         model.refresh()
+        PanelCaches.retainOnly(Set(model.clips.map(\.id)))
         // A fresh view each time resets focus and scroll position.
         panel.contentView = NSHostingView(rootView: PanelView(
             model: model,
@@ -138,7 +140,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     func hide() {
         commandKeys.stop()
         panel.orderOut(nil)
-        PanelCaches.purge()
+        PanelCaches.panelDidHide()
     }
 
     /// Clicking away closes the panel. A row's context menu is the exception: if its tracking loop takes key status,

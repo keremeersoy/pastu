@@ -184,8 +184,14 @@ struct PreviewContent {
     @MainActor private static var cache: [(key: Key, content: PreviewContent)] = []
     @MainActor static var cachedCount: Int { cache.count }
 
-    /// Forgets every cached preview; see `PanelCaches.purge()`.
+    @MainActor static var cachedIDs: Set<Int64> { Set(cache.map(\.key.id)) }
+
+    /// Forgets every cached preview; see `PanelCaches`.
     @MainActor static func purge() { cache.removeAll() }
+
+    @MainActor static func remove(_ clipID: Int64) { cache.removeAll { $0.key.id == clipID } }
+
+    @MainActor static func retain(_ clipIDs: Set<Int64>) { cache.removeAll { !clipIDs.contains($0.key.id) } }
     /// A few entries are enough: the selected clip, and the ones just before it while moving through the list.
     private static let cacheLimit = 8
 

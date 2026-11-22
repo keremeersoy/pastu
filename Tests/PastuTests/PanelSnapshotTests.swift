@@ -376,9 +376,9 @@ extension ShellTests {
         #expect(denseCut.headEnd == denseCut.tailStart)
     }
 
-    /// Hiding the panel forgets every clip's text and pictures held for drawing, so nothing deleted or cleared
-    /// (⌘⌫, Clear History…, retention) lingers in memory.
-    @Test func hidingThePanelPurgesPreviewAndPictureCaches() async throws {
+    /// Hiding forgets the preview text and the full-size picture, but keeps the small thumbnails so the next open
+    /// does not re-decode every visible screenshot on the main thread.
+    @Test func hidingThePanelForgetsPreviewsButKeepsThumbnails() async throws {
         let (model, loader) = try pictureSample()
         let controller = PanelController(model: model, canAutoPaste: { true }, imageData: loader, onSelect: { _ in })
         controller.show()
@@ -386,26 +386,67 @@ extension ShellTests {
         let text = try #require(model.clips.first { $0.kind == .text })
         _ = PreviewContent.cached(for: text, query: "launch")
         #expect(PreviewContent.cachedCount > 0)
-        #expect(ImageCache.shared.entryCount > 0) // the rows drew their thumbnails
+        #expect(ImageCache.shared.holdsFullImage) // the selected picture is previewed
+        let thumbnails = ImageCache.shared.entryCount
+        #expect(thumbnails > 0)
 
         controller.hide()
         #expect(PreviewContent.cachedCount == 0)
-        #expect(ImageCache.shared.entryCount == 0)
         #expect(!ImageCache.shared.holdsFullImage)
+        #expect(ImageCache.shared.entryCount == thumbnails)
     }
 
-    /// ⌘⌫ purges at once too, while the panel stays open.
-    @Test func deletingAClipPurgesTheCaches() async throws {
+    /// ⌘⌫ forgets just the deleted clip, while the panel stays open.
+    @Test func deletingAClipForgetsOnlyThatClip() async throws {
         let (model, loader) = try pictureSample()
         let controller = PanelController(model: model, canAutoPaste: { true }, imageData: loader, onSelect: { _ in })
         controller.show()
         defer { controller.hide() }
         try await Task.sleep(for: .milliseconds(300))
-        #expect(ImageCache.shared.entryCount > 0)
-        _ = PreviewContent.cached(for: try #require(model.selectedClip), query: "")
+        let deleted = try #require(model.selectedClip)
+        let kept = try #require(model.clips.last { $0.kind == .image && $0.id != deleted.id })
+        #expect(ImageCache.shared.contains(deleted.id))
+        #expect(ImageCache.shared.contains(kept.id))
+        _ = PreviewContent.cached(for: deleted, query: "")
+
         controller.panel.onDeleteSelected?()
-        #expect(PreviewContent.cachedCount == 0)
+        #expect(!ImageCache.shared.contains(deleted.id))
+        #expect(!ImageCache.shared.holdsFullImage)
+        #expect(ImageCache.shared.contains(kept.id))
+        #expect(!PreviewContent.cachedIDs.contains(deleted.id))
+    }
+
+    /// A clip removed some other way while the panel was hidden (retention prune) is dropped on the next open.
+    @Test func showingThePanelDropsClipsNoLongerInTheStore() async throws {
+        let store = try ClipStore()
+        try store.insert(.image(png: samplePicture(300, 200), sourceBundleIdentifier: nil, date: Date().addingTimeInterval(-60)))
+        try store.insert(.image(png: samplePicture(200, 300), sourceBundleIdentifier: nil, date: Date()))
+        let model = ClipListModel(store: store)
+        let loader: (Int64) -> Data? = { id in (try? store.imageData(id: id)) ?? nil }
+        let controller = PanelController(model: model, canAutoPaste: { true }, imageData: loader, onSelect: { _ in })
+        controller.show()
+        try await Task.sleep(for: .milliseconds(300))
+        controller.hide()
+        let pruned = try #require(model.clips.last).id
+        #expect(ImageCache.shared.contains(pruned))
+
+        try store.delete(id: pruned)
+        controller.show()
+        defer { controller.hide() }
+        #expect(!ImageCache.shared.contains(pruned))
+        #expect(ImageCache.shared.contains(try #require(model.clips.first).id))
+    }
+
+    /// Clear History forgets everything (its menu action runs a modal alert, so the purge is called directly).
+    @Test func clearingHistoryPurgesEverything() async throws {
+        let (model, loader) = try pictureSample()
+        for clip in model.clips { _ = ImageCache.shared.info(for: clip.id, load: loader) }
+        _ = ImageCache.shared.fullImage(for: try #require(model.clips.first).id, load: loader)
+        _ = PreviewContent.cached(for: try #require(model.clips.last), query: "")
+        PanelCaches.purgeAll()
         #expect(ImageCache.shared.entryCount == 0)
+        #expect(!ImageCache.shared.holdsFullImage)
+        #expect(PreviewContent.cachedCount == 0)
     }
 
     private func appearanceName(_ appearance: NSAppearance.Name) -> String { appearance == .aqua ? "light" : "dark" }
