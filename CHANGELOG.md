@@ -12,7 +12,7 @@ follows [Semantic Versioning](https://semver.org/).
 - Mouse support: click a clip to select it, double click to paste it, right click for Paste, Copy, Pin, Delete and
   Ignore app. Clicking never takes focus away from the app you are pasting into.
 - Pictures show as thumbnails in the list and a large preview, with their size.
-- Links open from the preview; code-like clips use a monospaced font; search matches are highlighted and the
+- Links show their host and the full address in the preview; code-like clips use a monospaced font; search matches are highlighted and the
   preview jumps to the match in long clips.
 - Keyboard: ⇧Tab filters backwards, ⌘↑/⌘↓ and Home/End jump to the first or last clip, Page Up/Down move by a page,
   and ⌘/ shows every shortcut.

@@ -28,7 +28,7 @@ import Testing
         }
     }
 
-    @Test func showItemDisplaysTheHotkey() throws {
+    @Test func showItemDisplaysTheHotkey() {
         withMenu { _, menu in
             let show = menu.items.first { $0.title == "Show Pastu" }
             #expect(show?.keyEquivalent == "v")

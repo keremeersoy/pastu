@@ -4,8 +4,8 @@ Things the automated tests cannot check. Run through them on a real build before
 Use a build made with `scripts/build-app.sh` and sample clips only.
 
 ## Setup
-- [ ] Accessibility permission must be granted again after installing a build with the new bundle identifier
-      (remove the old Pastu entry in System Settings, then allow the new one).
+- [ ] If you are upgrading from a build with a different bundle identifier (before 0.1.0), grant the Accessibility
+      permission again.
 - [ ] Copy a few texts, a link, a code snippet and several screenshots so every row type exists.
 
 ## Look
