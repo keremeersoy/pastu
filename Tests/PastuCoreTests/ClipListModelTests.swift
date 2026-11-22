@@ -418,4 +418,38 @@ import Testing
             #expect(model.notice == nil)
         }
     }
+
+    // MARK: Row snippets (cached per clip and query)
+
+    private var deepMatch: String { String(repeating: "filler words ", count: 200) + "zebra crossing" }
+
+    @Test func rowSnippetIsComputedOncePerClipAndQuery() throws {
+        let model = ClipListModel(store: try makeStore([deepMatch]))
+        model.query = "zebra"
+        let clip = try #require(model.selectedClip)
+        let first = model.rowSnippet(for: clip)
+        #expect(first != nil)
+        // Row bodies ask again on every hover, arrow key and ⌘ press: those must hit the cache.
+        for _ in 0..<5 { #expect(model.rowSnippet(for: clip) == first) }
+        #expect(model.rowSnippetComputations == 1)
+    }
+
+    @Test func rowSnippetCacheIsClearedWhenTheQueryChanges() throws {
+        let model = ClipListModel(store: try makeStore([deepMatch]))
+        model.query = "zebra"
+        let clip = try #require(model.selectedClip)
+        #expect(model.rowSnippet(for: clip)?.text.contains("zebra") == true)
+        model.query = "crossing"
+        let again = try #require(model.selectedClip)
+        let snippet = try #require(model.rowSnippet(for: again))
+        #expect(snippet.highlights.map { String(snippet.text[$0]) } == ["crossing"])
+        #expect(model.rowSnippetComputations == 2)
+    }
+
+    @Test func rowSnippetIsNilWithoutAQueryAndCostsNothing() throws {
+        let model = ClipListModel(store: try makeStore([deepMatch]))
+        let clip = try #require(model.selectedClip)
+        #expect(model.rowSnippet(for: clip) == nil)
+        #expect(model.rowSnippetComputations == 0)
+    }
 }

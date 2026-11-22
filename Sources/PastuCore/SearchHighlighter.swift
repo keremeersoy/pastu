@@ -53,6 +53,20 @@ public enum SearchHighlighter {
         return Snippet(text: result, highlights: ranges(of: query, in: result))
     }
 
+    /// About how many title characters fit in a list row at `.body`. A match that does not fit in them is likely cut
+    /// off by the one-line limit, so the row shows a snippet instead. An estimate: SwiftUI does not report truncation.
+    public static let visibleTitleLength = 36
+    /// Short enough that the match (a third in) is not itself cut off in the one-line `.subheadline` subtitle.
+    public static let rowSnippetLength = 60
+
+    /// The snippet a list row shows instead of "App · time": nil when there is no match, or when the match is
+    /// already in the visible start of `title`. Scans the whole `text`, so callers should cache the result.
+    public static func rowSnippet(of query: String, title: String, text: String) -> Snippet? {
+        guard !terms(of: query).isEmpty else { return nil }
+        guard !titleContainsMatch(String(title.prefix(visibleTitleLength)), query: query) else { return nil }
+        return snippet(of: query, in: text, maxLength: rowSnippetLength)
+    }
+
     /// Whether a row title contains any match, so the row can skip the snippet line.
     public static func titleContainsMatch(_ title: String, query: String) -> Bool {
         earliestMatch(of: terms(of: query), in: title) != nil

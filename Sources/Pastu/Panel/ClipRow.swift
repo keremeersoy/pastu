@@ -11,28 +11,26 @@ struct ClipRow: View {
     /// The ⌘ badge is shown on the selected row, and on every row while ⌘ is held.
     let showsShortcut: Bool
     let query: String
+    /// Shown instead of "App · time"; computed once per clip and query by `ClipListModel.rowSnippet(for:)`,
+    /// because finding it scans the whole clip and row bodies are rebuilt on every hover and key press.
+    let snippet: SearchHighlighter.Snippet?
     let imageData: (Int64) -> Data?
     @State private var isHovered: Bool
 
     /// - Parameter isHovered: the initial hover state; lets snapshot tests render a hovered row without a mouse.
     init(
         clip: StoredClip, isSelected: Bool, shortcutDigit: Int?, showsShortcut: Bool, query: String,
-        imageData: @escaping (Int64) -> Data?, isHovered: Bool = false
+        snippet: SearchHighlighter.Snippet?, imageData: @escaping (Int64) -> Data?, isHovered: Bool = false
     ) {
         self.clip = clip
         self.isSelected = isSelected
         self.shortcutDigit = shortcutDigit
         self.showsShortcut = showsShortcut
         self.query = query
+        self.snippet = snippet
         self.imageData = imageData
         _isHovered = State(initialValue: isHovered)
     }
-
-    /// About how many title characters fit in the list column at `.body`. A match after this is likely cut off by
-    /// the one-line limit, so the row shows a snippet instead. An estimate: SwiftUI does not report truncation.
-    static let visibleTitleLength = 36
-    /// Short enough that the match (a third in) is not itself cut off at `.subheadline` in the list column.
-    static let snippetLength = 60
 
     var body: some View {
         let picture = clip.kind == .image ? ImageCache.shared.info(for: clip.id, load: imageData) : nil
@@ -90,14 +88,6 @@ struct ClipRow: View {
     private func titleRanges(_ title: String) -> [Range<String.Index>] {
         guard clip.kind != .image, !query.isEmpty else { return [] }
         return SearchHighlighter.ranges(of: query, in: title)
-    }
-
-    /// A snippet around the first match when that match is not in the visible part of the title.
-    private var snippet: SearchHighlighter.Snippet? {
-        guard clip.kind != .image, !SearchHighlighter.terms(of: query).isEmpty else { return nil }
-        let visible = String(ClipFormatting.rowTitle(clip.text).prefix(Self.visibleTitleLength))
-        guard !SearchHighlighter.titleContainsMatch(visible, query: query) else { return nil }
-        return SearchHighlighter.snippet(of: query, in: clip.text, maxLength: Self.snippetLength)
     }
 
     @ViewBuilder

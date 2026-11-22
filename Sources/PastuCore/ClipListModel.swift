@@ -41,10 +41,33 @@ public final class ClipListModel {
     /// Start loading the next page when the selection is this close to the end of the loaded rows.
     @ObservationIgnored private let prefetchDistance = 10
 
+    /// Row snippets for `snippetCacheQuery`, by clip id. Finding the match scans the whole clip, and row views are
+    /// rebuilt on every hover, arrow key and ⌘ press, so each clip is searched once per query. Not observed:
+    /// filling it while a row draws must not invalidate the view.
+    @ObservationIgnored private var snippetCache: [Int64: SearchHighlighter.Snippet?] = [:]
+    @ObservationIgnored private var snippetCacheQuery = ""
+    /// How many snippets were actually computed; lets tests prove the cache is used.
+    @ObservationIgnored private(set) var rowSnippetComputations = 0
+
     public init(store: ClipStore, pageSize: Int = 100) {
         self.store = store
         self.pageSize = pageSize
         reload(limit: pageSize)
+    }
+
+    /// The snippet the clip's row shows instead of "App · time" for the current query (see
+    /// `SearchHighlighter.rowSnippet`); nil for pictures, without a query, or when the title shows the match.
+    public func rowSnippet(for clip: StoredClip) -> SearchHighlighter.Snippet? {
+        guard clip.kind != .image, !SearchHighlighter.terms(of: query).isEmpty else { return nil }
+        if snippetCacheQuery != query {
+            snippetCache = [:]
+            snippetCacheQuery = query
+        }
+        if let cached = snippetCache[clip.id] { return cached }
+        rowSnippetComputations += 1
+        let snippet = SearchHighlighter.rowSnippet(of: query, title: ClipFormatting.rowTitle(clip.text), text: clip.text)
+        snippetCache[clip.id] = snippet
+        return snippet
     }
 
     public var selectedClip: StoredClip? {

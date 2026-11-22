@@ -260,6 +260,7 @@ extension ShellTests {
         // Guards the setup: the match must be outside the title, or the row would not need a snippet.
         #expect(!ClipFormatting.rowTitle(selected.text).contains("rotates"))
         #expect(SearchHighlighter.snippet(of: model.query, in: selected.text) != nil)
+        #expect(model.rowSnippet(for: selected) != nil)
 
         let (image, content) = try await renderWindow(
             PanelView(model: model, canAutoPaste: true, onSubmit: {}), appearance: appearance
@@ -293,7 +294,7 @@ extension ShellTests {
             ForEach(Array(clips.enumerated()), id: \.offset) { index, clip in
                 ClipRow(
                     clip: clip, isSelected: index == 0, shortcutDigit: index + 1, showsShortcut: index == 0,
-                    query: "", imageData: loader, isHovered: index == 1
+                    query: "", snippet: nil, imageData: loader, isHovered: index == 1
                 )
             }
             Spacer()

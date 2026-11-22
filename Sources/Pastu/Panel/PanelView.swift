@@ -120,7 +120,7 @@ struct PanelView: View {
                             clip: clip, isSelected: isSelected,
                             shortcutDigit: index < 9 ? index + 1 : nil,
                             showsShortcut: isSelected || commandKeys.isCommandHeld,
-                            query: model.query, imageData: imageData
+                            query: model.query, snippet: model.rowSnippet(for: clip), imageData: imageData
                         )
                             .id(clip.id)
                     }

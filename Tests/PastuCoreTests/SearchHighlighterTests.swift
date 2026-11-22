@@ -68,4 +68,46 @@ import Testing
         #expect(!SearchHighlighter.titleContainsMatch("Hello World", query: "moon"))
         #expect(!SearchHighlighter.titleContainsMatch("Hello World", query: " "))
     }
+
+    // MARK: Row snippet (snippet vs "App · time")
+
+    /// A title whose only match of "zebra" starts at character `offset`.
+    private func title(matchAt offset: Int) -> String {
+        String(repeating: "a", count: offset) + "zebra tail"
+    }
+
+    @Test func rowSnippetIsNilWhenTheMatchIsInTheVisibleTitle() {
+        // Starts at 31, ends at 36: fully inside the first 36 characters.
+        let text = title(matchAt: SearchHighlighter.visibleTitleLength - 5)
+        #expect(SearchHighlighter.rowSnippet(of: "zebra", title: text, text: text) == nil)
+    }
+
+    @Test func rowSnippetAppearsWhenTheMatchStartsPastTheVisibleTitle() throws {
+        let text = title(matchAt: SearchHighlighter.visibleTitleLength)
+        let snippet = try #require(SearchHighlighter.rowSnippet(of: "zebra", title: text, text: text))
+        #expect(snippet == SearchHighlighter.snippet(of: "zebra", in: text, maxLength: SearchHighlighter.rowSnippetLength))
+        #expect(snippet.text.hasPrefix("…"))
+        #expect(snippet.highlights.map { String(snippet.text[$0]) } == ["zebra"])
+    }
+
+    @Test func rowSnippetAppearsWhenTheMatchIsCutByTheVisibleTitle() {
+        // Starts at 33: only "zeb" is visible, which does not count as a visible match.
+        let text = title(matchAt: SearchHighlighter.visibleTitleLength - 3)
+        #expect(SearchHighlighter.rowSnippet(of: "zebra", title: text, text: text) != nil)
+    }
+
+    @Test func rowSnippetIsNilWithoutQueryOrMatch() {
+        #expect(SearchHighlighter.rowSnippet(of: "  ", title: "abc", text: "abc") == nil)
+        #expect(SearchHighlighter.rowSnippet(of: "moon", title: "abc", text: "abc") == nil)
+    }
+
+    @Test func rowSnippetKeepsTheMatchNearTheStartOfALongClip() throws {
+        let text = String(repeating: "filler ", count: 500) + "zebra" + String(repeating: " filler", count: 500)
+        let snippet = try #require(SearchHighlighter.rowSnippet(
+            of: "zebra", title: ClipFormatting.rowTitle(text), text: text
+        ))
+        let match = try #require(snippet.highlights.first)
+        // A third of 60 before the match (plus the leading "…"), so a one-line subtitle still shows it.
+        #expect(snippet.text.distance(from: snippet.text.startIndex, to: match.lowerBound) <= 21)
+    }
 }
