@@ -51,6 +51,8 @@ public final class ClipListModel {
     @ObservationIgnored private var snippetCacheQuery = ""
     /// How many snippets were actually computed; lets tests prove the cache is used.
     @ObservationIgnored private(set) var rowSnippetComputations = 0
+    /// Which clips have a cached snippet; lets tests prove that removed clips are forgotten.
+    var cachedSnippetIDs: Set<Int64> { Set(snippetCache.keys) }
 
     public init(store: ClipStore, pageSize: Int = 100) {
         self.store = store
@@ -71,6 +73,17 @@ public final class ClipListModel {
         let snippet = SearchHighlighter.rowSnippet(of: query, title: ClipFormatting.rowTitle(clip.text), text: clip.text)
         snippetCache[clip.id] = snippet
         return snippet
+    }
+
+    /// Forgets every cached row snippet. A snippet is clip text, so it must not outlive Clear History.
+    public func purgeSnippets() {
+        snippetCache = [:]
+        snippetCacheQuery = ""
+    }
+
+    /// Forgets one clip's snippet, because the clip was removed.
+    public func forgetSnippet(of clipID: Int64) {
+        snippetCache[clipID] = nil
     }
 
     public var selectedClip: StoredClip? {
@@ -120,6 +133,7 @@ public final class ClipListModel {
     public func resetForShow() {
         notice = nil
         showsShortcuts = false
+        purgeSnippets()
         // The observers below would reload on their own; do it once explicitly so a no-change reset
         // still drops extra pages and the selection.
         query = ""
@@ -157,6 +171,7 @@ public final class ClipListModel {
     public func deleteSelected() {
         guard let clip = selectedClip else { return }
         try? store.delete(id: clip.id)
+        forgetSnippet(of: clip.id)
         reloadLoaded()   // clamps the selection into range
     }
 

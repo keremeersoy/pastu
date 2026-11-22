@@ -86,13 +86,14 @@ final class ImageCache {
     }
 }
 
-/// Everything the panel keeps in memory to draw clips: thumbnails, the full picture and preview text. A clip the
-/// user removed must not linger there, but thumbnails are kept across opens (re-decoding every visible screenshot
-/// would make opening the panel slow), so each removal path forgets just what it has to.
+/// Everything the panel keeps in memory to draw clips: thumbnails, the full picture, preview text and row snippets.
+/// A clip the user removed must not linger there, but thumbnails are kept across opens (re-decoding every visible
+/// screenshot would make opening the panel slow), so each removal path forgets just what it has to.
 @MainActor
 enum PanelCaches {
-    /// Clear History: forget everything.
-    static func purgeAll() {
+    /// Clear History: forget everything, including the row snippets the list's model keeps.
+    static func purgeAll(model: ClipListModel?) {
+        model?.purgeSnippets()
         ImageCache.shared.removeAll()
         PreviewContent.purge()
     }
@@ -104,7 +105,8 @@ enum PanelCaches {
     }
 
     /// One clip was deleted from the panel.
-    static func forget(_ clipID: Int64) {
+    static func forget(_ clipID: Int64, model: ClipListModel) {
+        model.forgetSnippet(of: clipID)
         ImageCache.shared.remove(clipID)
         PreviewContent.remove(clipID)
     }

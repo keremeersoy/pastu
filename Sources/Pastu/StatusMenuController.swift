@@ -170,7 +170,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         do {
             try store.clear(keepPinned: true)
             storageError = nil
-            PanelCaches.purgeAll()
+            PanelCaches.purgeAll(model: model)
         } catch {
             NSLog("Pastu could not clear the history: \(error)")
             storageError = .clear

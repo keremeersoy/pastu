@@ -465,7 +465,7 @@ extension ShellTests {
         for clip in model.clips { _ = ImageCache.shared.info(for: clip.id, load: loader) }
         _ = ImageCache.shared.fullImage(for: try #require(model.clips.first).id, load: loader)
         _ = PreviewContent.cached(for: try #require(model.clips.last), query: "")
-        PanelCaches.purgeAll()
+        PanelCaches.purgeAll(model: model)
         #expect(ImageCache.shared.entryCount == 0)
         #expect(!ImageCache.shared.holdsFullImage)
         #expect(PreviewContent.cachedCount == 0)

@@ -63,7 +63,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.onDeleteSelected = { [weak self] in
             guard let self, let id = model.selectedClip?.id else { return }
             model.deleteSelected()
-            PanelCaches.forget(id)
+            PanelCaches.forget(id, model: model)
         }
         panel.onMoveToStart = { model.moveToStart() }
         panel.onMoveToEnd = { model.moveToEnd() }

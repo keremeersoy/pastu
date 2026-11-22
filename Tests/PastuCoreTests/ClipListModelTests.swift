@@ -459,4 +459,42 @@ import Testing
         #expect(model.rowSnippet(for: clip) == nil)
         #expect(model.rowSnippetComputations == 0)
     }
+
+    // A snippet is clip text: it must not outlive the clip or the panel session.
+
+    @Test func purgeSnippetsForgetsEveryCachedSnippet() throws {
+        let model = ClipListModel(store: try makeStore([deepMatch, "x" + deepMatch]))
+        model.query = "zebra"
+        for clip in model.clips { _ = model.rowSnippet(for: clip) }
+        #expect(model.cachedSnippetIDs.count == 2)
+        model.purgeSnippets()
+        #expect(model.cachedSnippetIDs.isEmpty)
+        _ = model.rowSnippet(for: try #require(model.selectedClip))
+        #expect(model.rowSnippetComputations == 3)
+    }
+
+    @Test func forgetSnippetDropsOnlyThatClip() throws {
+        let model = ClipListModel(store: try makeStore([deepMatch, "x" + deepMatch]))
+        model.query = "zebra"
+        for clip in model.clips { _ = model.rowSnippet(for: clip) }
+        model.forgetSnippet(of: model.clips[0].id)
+        #expect(model.cachedSnippetIDs == [model.clips[1].id])
+    }
+
+    @Test func resetForShowForgetsSnippets() throws {
+        let model = ClipListModel(store: try makeStore([deepMatch]))
+        model.query = "zebra"
+        _ = model.rowSnippet(for: try #require(model.selectedClip))
+        model.resetForShow()
+        #expect(model.cachedSnippetIDs.isEmpty)
+    }
+
+    @Test func deletingAClipForgetsItsSnippet() throws {
+        let model = ClipListModel(store: try makeStore([deepMatch, "x" + deepMatch]))
+        model.query = "zebra"
+        for clip in model.clips { _ = model.rowSnippet(for: clip) }
+        let deleted = try #require(model.selectedClip)
+        model.deleteSelected()
+        #expect(!model.cachedSnippetIDs.contains(deleted.id))
+    }
 }
