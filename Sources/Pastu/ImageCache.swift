@@ -98,8 +98,10 @@ enum PanelCaches {
         PreviewContent.purge()
     }
 
-    /// The panel hid: forget the clip text and the full-size picture; keep the small thumbnails.
-    static func panelDidHide() {
+    /// The panel hid: forget the clip text (previews and row snippets) and the full-size picture; keep the small
+    /// thumbnails.
+    static func panelDidHide(model: ClipListModel) {
+        model.purgeSnippets()
         ImageCache.shared.removeFullImage()
         PreviewContent.purge()
     }

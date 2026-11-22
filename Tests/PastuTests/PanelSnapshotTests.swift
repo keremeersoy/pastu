@@ -438,6 +438,27 @@ extension ShellTests {
         #expect(!PreviewContent.cachedIDs.contains(deleted.id))
     }
 
+    /// Row snippets are clip text too, so they go when the panel hides.
+    @Test func hidingThePanelForgetsRowSnippets() async throws {
+        let store = try ClipStore()
+        let text = String(repeating: "filler words ", count: 200) + "zebra"
+        try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date()))
+        let model = ClipListModel(store: store)
+        let controller = PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        model.query = "zebra"
+        _ = model.rowSnippet(for: try #require(model.selectedClip))
+        try #require(!model.cachedSnippetIDs.isEmpty)
+        // ⌘ is down when a clip is picked with ⌘1–9; hiding resets it, which makes the rows redraw.
+        controller.commandKeys.isCommandHeld = true
+        try await Task.sleep(for: .milliseconds(300))
+        controller.hide()
+        #expect(model.cachedSnippetIDs.isEmpty)
+        // The hidden view must not draw its rows again and fill the cache back up.
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(model.cachedSnippetIDs.isEmpty)
+    }
+
     /// A clip removed some other way while the panel was hidden (retention prune) is dropped on the next open.
     @Test func showingThePanelDropsClipsNoLongerInTheStore() async throws {
         let store = try ClipStore()

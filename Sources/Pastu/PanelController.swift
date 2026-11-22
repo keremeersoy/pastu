@@ -148,7 +148,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     func hide() {
         commandKeys.stop()
         panel.orderOut(nil)
-        PanelCaches.panelDidHide()
+        PanelCaches.panelDidHide(model: model)
     }
 
     /// Clicking away closes the panel. A row's context menu is the exception: if its tracking loop takes key status,
