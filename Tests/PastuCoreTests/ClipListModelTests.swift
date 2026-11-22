@@ -497,4 +497,18 @@ import Testing
         model.deleteSelected()
         #expect(!model.cachedSnippetIDs.contains(deleted.id))
     }
+
+    // MARK: Reset cost
+
+    @Test func resetForShowReloadsOnce() throws {
+        let model = ClipListModel(store: try makeBigStore(250))
+        model.query = "clip"
+        model.filter = .text
+        let before = model.reloads
+        model.resetForShow()
+        #expect(model.reloads == before + 1)
+        // The reset must not leave the observers switched off.
+        model.query = "clip 1"
+        #expect(model.reloads == before + 2)
+    }
 }

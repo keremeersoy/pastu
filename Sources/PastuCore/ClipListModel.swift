@@ -10,7 +10,7 @@ public final class ClipListModel {
     /// Setting a new query re-runs the search and moves the selection back to the top.
     public var query = "" {
         didSet {
-            guard query != oldValue else { return }
+            guard query != oldValue, !isResetting else { return }
             notice = nil
             selectedIndex = 0
             reload(limit: pageSize)
@@ -20,7 +20,7 @@ public final class ClipListModel {
     /// Restricts the list to text or links. Changing it moves the selection back to the top.
     public var filter = ClipFilter.all {
         didSet {
-            guard filter != oldValue else { return }
+            guard filter != oldValue, !isResetting else { return }
             notice = nil
             selectedIndex = 0
             reload(limit: pageSize)
@@ -43,6 +43,8 @@ public final class ClipListModel {
     @ObservationIgnored private let pageSize: Int
     /// Start loading the next page when the selection is this close to the end of the loaded rows.
     @ObservationIgnored private let prefetchDistance = 10
+    /// True while `resetForShow` clears the query and filter, so their observers do not reload on their own.
+    @ObservationIgnored private var isResetting = false
 
     /// Row snippets for `snippetCacheQuery`, by clip id. Finding the match scans the whole clip, and row views are
     /// rebuilt on every hover, arrow key and ⌘ press, so each clip is searched once per query. Not observed:
@@ -53,6 +55,8 @@ public final class ClipListModel {
     @ObservationIgnored private(set) var rowSnippetComputations = 0
     /// Which clips have a cached snippet; lets tests prove that removed clips are forgotten.
     var cachedSnippetIDs: Set<Int64> { Set(snippetCache.keys) }
+    /// How many times the list was reloaded from the store; lets tests prove a reset reloads once.
+    @ObservationIgnored private(set) var reloads = 0
 
     public init(store: ClipStore, pageSize: Int = 100) {
         self.store = store
@@ -134,10 +138,12 @@ public final class ClipListModel {
         notice = nil
         showsShortcuts = false
         purgeSnippets()
-        // The observers below would reload on their own; do it once explicitly so a no-change reset
-        // still drops extra pages and the selection.
+        // The query and filter observers would each reload; hold them back and reload once at the end, which also
+        // covers a no-change reset (it still drops extra pages and the selection).
+        isResetting = true
         query = ""
         filter = .all
+        isResetting = false
         selectedIndex = 0
         reload(limit: pageSize)
     }
@@ -211,6 +217,7 @@ public final class ClipListModel {
     }
 
     private func reload(limit: Int) {
+        reloads += 1
         // A failing query shows an empty list instead of crashing the panel.
         clips = (try? store.search(query, limit: limit, offset: 0, kind: filter.kind)) ?? []
         // A short page means the history is exhausted; the extra rows of a bigger reload count too.
