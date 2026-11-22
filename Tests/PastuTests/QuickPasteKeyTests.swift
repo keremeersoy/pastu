@@ -29,6 +29,15 @@ extension ShellTests {
         try? await Task.sleep(for: .seconds(seconds))
     }
 
+    /// Polls for up to 2 s until the search field's field editor is the panel's first responder.
+    private func searchFieldHasFocus(_ panel: NSWindow) async -> Bool {
+        for _ in 0..<20 {
+            if panel.isKeyWindow, panel.firstResponder is NSTextView { return true }
+            await pump(0.1)
+        }
+        return false
+    }
+
     /// Covers our own handling only. It cannot prove how macOS routes real keystrokes to an
     /// inactive app: NSApp.sendEvent delivers to the window regardless of activation.
     @Test func commandTwoSubmitsTheSecondRow() async throws {
@@ -121,9 +130,12 @@ extension ShellTests {
         await pump()
         defer { panel.orderOut(nil) }
 
+        // Rarely (about 1 run in 7, only with the snapshot suite before it) the first Shift-Tab was not handled.
+        // Wait until the search field really has focus, and say where focus was if it still fails.
+        try #require(await searchFieldHasFocus(panel), "first responder: \(String(describing: panel.firstResponder))")
         NSApp.sendEvent(keyEvent("\u{19}", keyCode: 48, modifiers: .shift, window: panel))
         await pump(0.2)
-        #expect(model.filter == .images)
+        #expect(model.filter == .images, "first responder: \(String(describing: panel.firstResponder))")
         NSApp.sendEvent(keyEvent("\u{19}", keyCode: 48, modifiers: .shift, window: panel))
         await pump(0.2)
         #expect(model.filter == .links)
@@ -253,28 +265,37 @@ extension ShellTests {
 
     // MARK: Mouse in the header
 
+    /// Pins the shell style and turns Reduce Transparency off, so the filter control does not depend on the
+    /// machine's accessibility settings.
     private func hostedPanel(_ model: ClipListModel, style: PanelStyle) async -> ClipPanel {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
         enableAccessibilityTree()
         let panel = ClipPanel(size: NSSize(width: 780, height: 460))
         panel.contentView = NSHostingView(
-            rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {}).environment(\.panelStyle, style)
+            rootView: PanelView(model: model, canAutoPaste: true, onSubmit: {})
+                .environment(\.panelStyle, style)
+                .environment(\._accessibilityReduceTransparency, false)
         )
         panel.makeKeyAndOrderFront(nil)
         await pump()
         return panel
     }
 
-    /// Our own glass buttons. The macOS 15 segmented control is a stock Picker; pressing its AppKit segment through
-    /// accessibility in this harness ends the test process early (silently, exit 0), so it is only rendered.
-    @Test func clickingAFilterSelectsIt() async throws {
+    /// Our own glass buttons (macOS 26 only). The macOS 15 segmented control is a stock Picker and is only rendered:
+    /// pressing its AppKit segment through accessibility ends this test process early (see `accessibilityPress`).
+    @Test(.enabled(if: ProcessInfo.processInfo.isOperatingSystemAtLeast(
+        OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
+    ), "glass buttons exist only on macOS 26"))
+    func clickingAFilterSelectsIt() async throws {
         let model = ClipListModel(store: try ClipStore())
         let panel = await hostedPanel(model, style: .glass)
         defer { panel.orderOut(nil) }
         let content = try #require(panel.contentView)
 
         let links = try #require(accessibilityElement(containing: "Links", in: content))
+        // A segment here would mean the glass buttons fell back to the Picker: fail instead of pressing it.
+        try #require(links.accessibilityRole?() == .button)
         #expect(accessibilityPress(links))
         await pump(0.2)
         #expect(model.filter == .links)

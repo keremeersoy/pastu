@@ -189,8 +189,17 @@ extension ShellTests {
         save(image, name: "panel-banner-paused-\(appearance == .aqua ? "light" : "dark")")
         #expect(image.size == PanelMetrics.size)
         #expect(containsText("Recording is paused", in: content))
-        // One banner at a time, and a normal panel shows none.
         #expect(!(containsText("Pastu can't paste for you", in: content)))
+    }
+
+    /// One banner at a time: missing Accessibility wins over a paused recording.
+    @Test func panelShowsOnlyTheAccessibilityBannerWhenBothApply() async throws {
+        let (image, content) = try await renderWindow(
+            PanelView(model: try sampleModel(), canAutoPaste: false, isPaused: true, onSubmit: {})
+        )
+        save(image, name: "panel-banner-both")
+        #expect(containsText("Pastu can't paste for you", in: content))
+        #expect(!(containsText("Recording is paused", in: content)))
     }
 
     @Test func panelShowsNoBannerWhenAllIsWell() async throws {
