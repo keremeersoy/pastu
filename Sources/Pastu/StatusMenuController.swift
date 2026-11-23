@@ -47,6 +47,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let recording: RecordingState
     private let ignoredApps: IgnoredApps
     private let systemPasteboard: SystemPasteboard
+    private let theme: ThemeSettings
+    private let glassAvailable: Bool
 
     private var appBeforeAbout: NSRunningApplication?
     private var statusItem: NSStatusItem?
@@ -54,13 +56,24 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private var storageWarningItem: NSMenuItem?
     private var accessibilityWarningItem: NSMenuItem?
     private var ignoredMenuItem: NSMenuItem?
+    private var themeMenuItem: NSMenuItem?
     private var pauseItem: NSMenuItem?
 
-    init(recording: RecordingState, ignoredApps: IgnoredApps, systemPasteboard: SystemPasteboard) {
+    /// - Parameter glassAvailable: whether Liquid Glass can be drawn (macOS 26+); replaceable for tests.
+    init(
+        recording: RecordingState, ignoredApps: IgnoredApps, systemPasteboard: SystemPasteboard,
+        theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = StatusMenuController.systemHasGlass
+    ) {
         self.recording = recording
         self.ignoredApps = ignoredApps
         self.systemPasteboard = systemPasteboard
+        self.theme = theme
+        self.glassAvailable = glassAvailable
         super.init()
+    }
+
+    static var systemHasGlass: Bool {
+        if #available(macOS 26, *) { true } else { false }
     }
 
     /// The menu, for tests.
@@ -116,6 +129,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         ignored.submenu = NSMenu()
         menu.addItem(ignored)
         ignoredMenuItem = ignored
+        let themeItem = NSMenuItem(title: "Theme", action: nil, keyEquivalent: "")
+        themeItem.submenu = NSMenu()
+        menu.addItem(themeItem)
+        themeMenuItem = themeItem
+        rebuildThemeMenu()
         menu.addItem(.separator())
         menu.addItem(withTitle: "About \(PastuInfo.name)", action: #selector(showAbout), keyEquivalent: "")
             .target = self
@@ -134,6 +152,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         rebuildIgnoredAppsMenu()
+        rebuildThemeMenu()
         accessWarningItem?.isHidden = !systemPasteboard.isAccessDenied
         accessibilityWarningItem?.isHidden = PasteSender.isTrusted
         if let storageError {
@@ -266,6 +285,43 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             item.representedObject = id
             submenu.addItem(item)
         }
+    }
+
+    /// Appearance and material choices with a checkmark on the current ones. Rebuilt on every change and every open.
+    /// A stored Liquid Glass choice is checked as Frosted where glass does not exist, matching what is drawn.
+    private func rebuildThemeMenu() {
+        guard let submenu = themeMenuItem?.submenu else { return }
+        submenu.removeAllItems()
+        submenu.addItem(.sectionHeader(title: "Appearance"))
+        for appearance in PanelAppearance.allCases {
+            let item = NSMenuItem(title: appearance.title, action: #selector(chooseAppearance(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = appearance.rawValue
+            item.state = theme.appearance == appearance ? .on : .off
+            submenu.addItem(item)
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(.sectionHeader(title: "Material"))
+        let current = theme.material.resolved(glassAvailable: glassAvailable)
+        for material in PanelMaterial.choices(glassAvailable: glassAvailable) {
+            let item = NSMenuItem(title: material.title, action: #selector(chooseMaterial(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = material.rawValue
+            item.state = current == material ? .on : .off
+            submenu.addItem(item)
+        }
+    }
+
+    @objc private func chooseAppearance(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let appearance = PanelAppearance(rawValue: raw) else { return }
+        theme.appearance = appearance
+        rebuildThemeMenu()
+    }
+
+    @objc private func chooseMaterial(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let material = PanelMaterial(rawValue: raw) else { return }
+        theme.material = material
+        rebuildThemeMenu()
     }
 
     @objc private func stopIgnoring(_ sender: NSMenuItem) {

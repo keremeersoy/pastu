@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let retention = RetentionPolicy()
     private let recording: RecordingState
     private let ignoredApps: IgnoredApps
+    private let theme: ThemeSettings
     private let statusMenu: StatusMenuController
     private let pasteCoordinator = PasteCoordinator()
 
@@ -20,10 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let systemPasteboard = SystemPasteboard()
         let recording = RecordingState(store: UserDefaults.standard)
         let ignoredApps = IgnoredApps(store: UserDefaults.standard)
+        let theme = ThemeSettings(store: UserDefaults.standard)
+        self.theme = theme
         self.systemPasteboard = systemPasteboard
         self.recording = recording
         self.ignoredApps = ignoredApps
-        statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard)
+        statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme)
         super.init()
         statusMenu.onShowPanel = { [weak self] in self?.panelController?.toggle() }
     }
@@ -44,7 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 imageData: { id in (try? store.imageData(id: id)) ?? nil },
                 isPaused: { [recording] in recording.isPaused },
                 onResume: { [weak self] in self?.statusMenu.resumeRecording() },
-                onCopy: { [weak self] clip in self?.pasteCoordinator.copy(clip) }
+                onCopy: { [weak self] clip in self?.pasteCoordinator.copy(clip) },
+                theme: theme
             ) { [weak self] clip in
                 self?.pasteCoordinator.paste(clip)
             }

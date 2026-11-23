@@ -5,26 +5,42 @@ import Testing
 
 @MainActor
 @Suite struct StatusMenuTests {
-    private func makeController(pasteboard: NSPasteboard) -> StatusMenuController {
+    private func makeController(
+        pasteboard: NSPasteboard, theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = true
+    ) -> StatusMenuController {
         StatusMenuController(
             recording: RecordingState(), ignoredApps: IgnoredApps(),
-            systemPasteboard: SystemPasteboard(pasteboard: pasteboard)
+            systemPasteboard: SystemPasteboard(pasteboard: pasteboard),
+            theme: theme, glassAvailable: glassAvailable
         )
     }
 
     /// Builds the menu without adding a real item to the menu bar, on a private pasteboard.
-    private func withMenu(_ body: (StatusMenuController, NSMenu) -> Void) {
+    private func withMenu(
+        theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = true,
+        _ body: (StatusMenuController, NSMenu) -> Void
+    ) {
         let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
         defer { raw.releaseGlobally() }
-        let controller = makeController(pasteboard: raw)
+        let controller = makeController(pasteboard: raw, theme: theme, glassAvailable: glassAvailable)
         controller.install(inStatusBar: false)
         body(controller, controller.menuForTesting)
+    }
+
+    private func withMenuThrowing(
+        theme: ThemeSettings, _ body: (StatusMenuController, NSMenu) throws -> Void
+    ) throws {
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        defer { raw.releaseGlobally() }
+        let controller = makeController(pasteboard: raw, theme: theme)
+        controller.install(inStatusBar: false)
+        try body(controller, controller.menuForTesting)
     }
 
     @Test func itemsFollowTheHIGOrder() {
         withMenu { _, menu in
             let titles = menu.items.filter { !$0.isHidden && !$0.isSeparatorItem }.map(\.title)
-            #expect(titles == ["Show Pastu", "Pause Recording", "Clear History…", "Ignored Apps", "About Pastu", "Quit Pastu"])
+            #expect(titles == ["Show Pastu", "Pause Recording", "Clear History…", "Ignored Apps", "Theme", "About Pastu", "Quit Pastu"])
         }
     }
 
@@ -43,6 +59,64 @@ import Testing
             controller.toggleRecording()
             #expect(pause?.state == .on)
             #expect(pause?.title == "Pause Recording")
+        }
+    }
+
+    // MARK: Theme
+
+    private func themeMenu(_ menu: NSMenu) -> NSMenu? {
+        menu.items.first { $0.title == "Theme" }?.submenu
+    }
+
+    /// A click on a menu item: the same action message the menu sends.
+    private func choose(_ item: NSMenuItem) {
+        if let action = item.action { _ = NSApp.sendAction(action, to: item.target, from: item) }
+    }
+
+    private func checked(_ submenu: NSMenu) -> [String] {
+        submenu.items.filter { $0.state == .on }.map(\.title)
+    }
+
+    @Test func themeSubmenuListsAppearanceThenMaterial() {
+        withMenu { _, menu in
+            let titles = themeMenu(menu)?.items.filter { !$0.isSeparatorItem }.map(\.title)
+            #expect(titles == ["Appearance", "System", "Light", "Dark", "Material", "Liquid Glass", "Frosted", "Solid"])
+        }
+    }
+
+    @Test func themeSubmenuChecksTheCurrentChoices() {
+        withMenu { _, menu in
+            #expect(checked(themeMenu(menu)!) == ["System", "Liquid Glass"])
+        }
+        let theme = ThemeSettings()
+        theme.appearance = .dark
+        theme.material = .solid
+        withMenu(theme: theme) { _, menu in
+            #expect(checked(themeMenu(menu)!) == ["Dark", "Solid"])
+        }
+    }
+
+    @Test func choosingAnItemChangesTheThemeAndMovesTheCheckmark() throws {
+        let theme = ThemeSettings()
+        try withMenuThrowing(theme: theme) { _, menu in
+            let submenu = try #require(themeMenu(menu))
+            let dark = try #require(submenu.items.first { $0.title == "Dark" })
+            choose(dark)
+            #expect(theme.appearance == .dark)
+            #expect(checked(submenu) == ["Dark", "Liquid Glass"])
+            let frosted = try #require(submenu.items.first { $0.title == "Frosted" })
+            choose(frosted)
+            #expect(theme.material == .frosted)
+            #expect(checked(submenu) == ["Dark", "Frosted"])
+        }
+    }
+
+    @Test func withoutGlassTheMenuOffersNoLiquidGlassAndChecksFrosted() {
+        withMenu(glassAvailable: false) { _, menu in
+            let titles = themeMenu(menu)?.items.filter { !$0.isSeparatorItem }.map(\.title)
+            #expect(titles == ["Appearance", "System", "Light", "Dark", "Material", "Frosted", "Solid"])
+            // The stored default is Liquid Glass, which is drawn as Frosted here.
+            #expect(checked(themeMenu(menu)!) == ["System", "Frosted"])
         }
     }
 
