@@ -242,6 +242,8 @@ extension ShellTests {
     func panelRendersLegacyStyle(appearance: NSAppearance.Name) async throws {
         let view = PanelView(model: try sampleModel(), canAutoPaste: true, onSubmit: {})
             .environment(\.panelStyle, .legacy)
+            // Pinned: with Reduce Transparency on (as on GitHub's runners) the shell is an opaque fill on purpose.
+            .environment(\._accessibilityReduceTransparency, false)
         let (image, content) = try await renderWindow(view, appearance: appearance)
         save(image, name: "panel-legacy-\(appearance == .aqua ? "light" : "dark")")
         // Rounded shell: the window corner stays see-through.

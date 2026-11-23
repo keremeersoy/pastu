@@ -35,6 +35,8 @@ jobs:
           xcodebuild -version
           swift --version
           xcrun --show-sdk-version
+          # Window tests can depend on it: hosted runners may have Reduce Transparency on.
+          swift -e 'import AppKit; print("Reduce Transparency:", NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)'
       # Shell tests open real AppKit windows; this needs a GUI login session. Hosted macOS runners provide one
       # (verified: all tests passed on macos-26 with Xcode 26.6 on 2026-11-21).
       - name: Test
