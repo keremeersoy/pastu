@@ -16,6 +16,8 @@ struct ClipRow: View {
     let snippet: SearchHighlighter.Snippet?
     let imageData: (Int64) -> Data?
     @State private var isHovered: Bool
+    /// A thumbnail decoded off the main thread; tagged with its clip so a reused row never shows another clip's.
+    @State private var loadedPicture: (clipID: Int64, info: ImageCache.Info)?
 
     /// - Parameter isHovered: the initial hover state; lets snapshot tests render a hovered row without a mouse.
     init(
@@ -33,7 +35,7 @@ struct ClipRow: View {
     }
 
     var body: some View {
-        let picture = clip.kind == .image ? ImageCache.shared.info(for: clip.id, load: imageData) : nil
+        let picture = picture
         let title = title
         HStack(spacing: 8) {
             Group {
@@ -71,6 +73,7 @@ struct ClipRow: View {
         .background(background)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .task(id: clip.id) { await loadPicture() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(for: clip, picture: picture))
         // The label says what and where from; the value carries the text itself, as a list cell's would.
@@ -116,6 +119,19 @@ struct ClipRow: View {
             AnyShapeStyle(Color.clear)
         }
         return RoundedRectangle(cornerRadius: PanelMetrics.innerRadius, style: .continuous).fill(fill)
+    }
+
+    /// What is in memory right now. A miss draws the placeholder; `.task` fills it in without blocking the panel.
+    private var picture: ImageCache.Info? {
+        guard clip.kind == .image else { return nil }
+        if let cached = ImageCache.shared.cachedInfo(for: clip.id) { return cached }
+        return loadedPicture?.clipID == clip.id ? loadedPicture?.info : nil
+    }
+
+    private func loadPicture() async {
+        guard clip.kind == .image, ImageCache.shared.cachedInfo(for: clip.id) == nil else { return }
+        let id = clip.id
+        if let info = await ImageCache.shared.loadInfo(for: id, load: imageData) { loadedPicture = (id, info) }
     }
 
     // MARK: VoiceOver

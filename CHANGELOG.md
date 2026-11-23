@@ -6,6 +6,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Picture thumbnails are decoded off the main thread, so opening the panel on a history full of screenshots no longer stalls (a retina screenshot took about 15 ms each on the main thread).
+
 ## [0.3.0] - 2026-11-23
 
 ### Added

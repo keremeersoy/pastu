@@ -16,12 +16,59 @@ final class ImageCache {
     /// The one cache the panel uses.
     static let shared = ImageCache()
 
-    static let thumbnailPixels = 96
+    nonisolated static let thumbnailPixels = 96
     /// Bounded so a long history of screenshots cannot grow the app's memory without limit.
     static let maxEntries = 200
 
     private var entries: [Int64: Info] = [:]
     var entryCount: Int { entries.count }
+
+    /// A thumbnail being made off the main thread. The token tells a load that was cancelled by a delete from a
+    /// newer one for the same clip.
+    private var inFlight: [Int64: (token: UUID, task: Task<Info?, Never>)] = [:]
+
+    /// A decoded thumbnail, ready to wrap in an `NSImage` on the main actor.
+    private struct Decoded: Sendable {
+        let image: CGImage
+        let width: Int
+        let height: Int
+        let byteCount: Int
+    }
+
+    /// Only what is already in memory; nil on a miss, never decodes. For drawing a row right now.
+    func cachedInfo(for clipID: Int64) -> Info? { entries[clipID] }
+
+    /// Like `info(for:load:)`, but the slow part (decoding) runs off the main thread, so opening the panel on a
+    /// history full of screenshots does not stall. The bytes are read here, on the caller's actor (the database is
+    /// not thread-safe). Loads for the same clip share one decode. If the clip is removed while it is decoding,
+    /// the result is thrown away rather than cached.
+    func loadInfo(for clipID: Int64, load: (Int64) -> Data?) async -> Info? {
+        if let cached = entries[clipID] { return cached }
+        if let running = inFlight[clipID] { return await running.task.value }
+        guard let data = load(clipID) else { return nil }
+
+        let token = UUID()
+        let task = Task { @MainActor [weak self] () -> Info? in
+            let decoded = await Task.detached(priority: .userInitiated) { Self.decode(data) }.value
+            guard let self, self.inFlight[clipID]?.token == token else { return nil }
+            self.inFlight[clipID] = nil
+            guard let decoded else { return nil }
+            let info = Info(
+                thumbnail: NSImage(cgImage: decoded.image, size: NSSize(width: decoded.image.width, height: decoded.image.height)),
+                width: decoded.width, height: decoded.height, byteCount: decoded.byteCount
+            )
+            if self.entries.count >= Self.maxEntries { self.entries.removeAll(keepingCapacity: true) }
+            self.entries[clipID] = info
+            return info
+        }
+        inFlight[clipID] = (token, task)
+        return await task.value
+    }
+
+    private nonisolated static func decode(_ data: Data) -> Decoded? {
+        guard let size = PNGConverter.dimensions(of: data), let image = makeThumbnailImage(from: data) else { return nil }
+        return Decoded(image: image, width: size.width, height: size.height, byteCount: data.count)
+    }
 
     /// Nil when the bytes are missing or not a decodable PNG; that is not cached, so a later call retries.
     func info(for clipID: Int64, load: (Int64) -> Data?) -> Info? {
@@ -43,6 +90,7 @@ final class ImageCache {
     /// Drops every thumbnail and the full picture; see `PanelCaches`.
     func removeAll() {
         entries.removeAll()
+        inFlight.removeAll()
         lastFull = nil
     }
 
@@ -54,12 +102,14 @@ final class ImageCache {
     /// Forgets one clip (it was deleted).
     func remove(_ clipID: Int64) {
         entries[clipID] = nil
+        inFlight[clipID] = nil
         if lastFull?.clipID == clipID { lastFull = nil }
     }
 
     /// Forgets every clip not in `clipIDs` (removed by retention or anything else while the panel was hidden).
     func retain(_ clipIDs: Set<Int64>) {
         entries = entries.filter { clipIDs.contains($0.key) }
+        inFlight = inFlight.filter { clipIDs.contains($0.key) }
         if let last = lastFull, !clipIDs.contains(last.clipID) { lastFull = nil }
     }
 
@@ -75,14 +125,18 @@ final class ImageCache {
 
     /// ImageIO makes the thumbnail while decoding, so a big screenshot is never held at full size.
     private static func makeThumbnail(from data: Data) -> NSImage? {
+        guard let image = makeThumbnailImage(from: data) else { return nil }
+        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+    }
+
+    private nonisolated static func makeThumbnailImage(from data: Data) -> CGImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: thumbnailPixels,
         ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }
 
