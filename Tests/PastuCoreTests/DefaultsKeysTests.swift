@@ -9,6 +9,8 @@ import Testing
     @Test func keyNamesAreStable() {
         #expect(DefaultsKeys.recordingPaused == "recordingPaused")
         #expect(DefaultsKeys.ignoredApps == "ignoredApps")
+        #expect(DefaultsKeys.panelAppearance == "panelAppearance")
+        #expect(DefaultsKeys.panelMaterial == "panelMaterial")
     }
 
     @Test func pauseIsStoredUnderItsKey() {

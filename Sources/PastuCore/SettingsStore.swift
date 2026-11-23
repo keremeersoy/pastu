@@ -6,6 +6,7 @@ import Foundation
 /// every suite leaves a `.plist` in `~/Library/Preferences`, and removing it races with the preferences daemon.
 public protocol SettingsStore: AnyObject {
     func bool(forKey key: String) -> Bool
+    func string(forKey key: String) -> String?
     func stringArray(forKey key: String) -> [String]?
     func set(_ value: Any?, forKey key: String)
 }
@@ -20,6 +21,7 @@ public final class InMemorySettings: SettingsStore {
     public init() {}
 
     public func bool(forKey key: String) -> Bool { values[key] as? Bool ?? false }
+    public func string(forKey key: String) -> String? { values[key] as? String }
     public func stringArray(forKey key: String) -> [String]? { values[key] as? [String] }
     public func set(_ value: Any?, forKey key: String) { values[key] = value }
 }
@@ -29,4 +31,6 @@ public final class InMemorySettings: SettingsStore {
 enum DefaultsKeys {
     static let recordingPaused = "recordingPaused"
     static let ignoredApps = "ignoredApps"
+    static let panelAppearance = "panelAppearance"
+    static let panelMaterial = "panelMaterial"
 }
