@@ -50,6 +50,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let ignoredApps: IgnoredApps
     private let systemPasteboard: SystemPasteboard
     private let theme: ThemeSettings
+    private let hotKeys: HotKeySettings
     private let glassAvailable: Bool
 
     private var appBeforeWindow: NSRunningApplication?
@@ -60,16 +61,19 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private var ignoredMenuItem: NSMenuItem?
     private var themeMenuItem: NSMenuItem?
     private var pauseItem: NSMenuItem?
+    private var showItem: NSMenuItem?
 
     /// - Parameter glassAvailable: whether Liquid Glass can be drawn (macOS 26+); replaceable for tests.
     init(
         recording: RecordingState, ignoredApps: IgnoredApps, systemPasteboard: SystemPasteboard,
-        theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = StatusMenuController.systemHasGlass
+        theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = StatusMenuController.systemHasGlass,
+        hotKeys: HotKeySettings = HotKeySettings { _ in true }
     ) {
         self.recording = recording
         self.ignoredApps = ignoredApps
         self.systemPasteboard = systemPasteboard
         self.theme = theme
+        self.hotKeys = hotKeys
         self.glassAvailable = glassAvailable
         super.init()
     }
@@ -119,9 +123,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         storageWarningItem = storageWarning
 
         // Display only: the Carbon hotkey is the real trigger. Showing it teaches the shortcut.
-        let show = menu.addItem(withTitle: "Show \(PastuInfo.name)", action: #selector(togglePanel), keyEquivalent: "v")
-        show.keyEquivalentModifierMask = [.command, .shift]
+        let show = menu.addItem(withTitle: "Show \(PastuInfo.name)", action: #selector(togglePanel), keyEquivalent: "")
         show.target = self
+        showItem = show
+        updateShowItem()
         let pause = menu.addItem(withTitle: "Pause Recording", action: #selector(toggleRecording), keyEquivalent: "")
         pause.target = self
         pauseItem = pause
@@ -158,6 +163,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         rebuildIgnoredAppsMenu()
         rebuildThemeMenu()
+        updateShowItem()
         accessWarningItem?.isHidden = !systemPasteboard.isAccessDenied
         accessibilityWarningItem?.isHidden = PasteSender.isTrusted
         if let storageError {
@@ -299,6 +305,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             item.representedObject = id
             submenu.addItem(item)
         }
+    }
+
+    /// The menu shows the shortcut the user chose; the item has no key of its own when the key has no plain character.
+    private func updateShowItem() {
+        let combo = hotKeys.combo
+        showItem?.keyEquivalent = combo.menuKeyEquivalent ?? ""
+        showItem?.keyEquivalentModifierMask = combo.modifiers.cocoa
     }
 
     /// Appearance and material choices with a checkmark on the current ones. Rebuilt on every change and every open.

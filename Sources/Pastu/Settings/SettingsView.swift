@@ -5,6 +5,8 @@ import SwiftUI
 struct SettingsView: View {
     let theme: ThemeSettings
     let launchAtLogin: LaunchAtLogin
+    let hotKeys: HotKeySettings
+    let recorder: ShortcutRecorder
     let glassAvailable: Bool
     /// Opens System Settings at Login Items; replaceable for tests.
     var openLoginItemsSettings: @MainActor () -> Void = SystemLoginItem.openLoginItemsSettings
@@ -18,6 +20,26 @@ struct SettingsView: View {
                 ))
                 .disabled(!launchAtLogin.isAvailable)
                 loginNote
+            }
+            Section("Shortcut") {
+                LabeledContent("Show Pastu") {
+                    HStack {
+                        Button(recorder.isRecording ? "Type shortcut…" : hotKeys.combo.displayString) {
+                            recorder.isRecording ? recorder.stop() : recorder.start()
+                        }
+                        .accessibilityLabel("Shortcut")
+                        .accessibilityValue(recorder.isRecording ? "Recording" : hotKeys.combo.displayString)
+                        if hotKeys.combo != .default {
+                            Button("Reset") { hotKeys.reset() }
+                        }
+                    }
+                }
+                if let message = hotKeys.errorMessage {
+                    Text(message).font(.footnote).foregroundStyle(.red)
+                } else {
+                    Text(recorder.isRecording ? "Press the new shortcut, or Esc to cancel." : "Click the shortcut to change it.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
             Section("Appearance") {
                 Picker("Appearance", selection: $theme.appearance) {
@@ -37,6 +59,9 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             launchAtLogin.refresh()
         }
+        // Recording ends with the window: a shortcut left suspended would stop working.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in recorder.stop() }
+        .onDisappear { recorder.stop() }
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
     }

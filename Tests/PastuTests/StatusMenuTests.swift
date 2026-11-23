@@ -6,12 +6,13 @@ import Testing
 @MainActor
 @Suite struct StatusMenuTests {
     private func makeController(
-        pasteboard: NSPasteboard, theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = true
+        pasteboard: NSPasteboard, theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = true,
+        hotKeys: HotKeySettings = HotKeySettings { _ in true }
     ) -> StatusMenuController {
         StatusMenuController(
             recording: RecordingState(), ignoredApps: IgnoredApps(),
             systemPasteboard: SystemPasteboard(pasteboard: pasteboard),
-            theme: theme, glassAvailable: glassAvailable
+            theme: theme, glassAvailable: glassAvailable, hotKeys: hotKeys
         )
     }
 
@@ -42,6 +43,25 @@ import Testing
             let titles = menu.items.filter { !$0.isHidden && !$0.isSeparatorItem }.map(\.title)
             #expect(titles == ["Show Pastu", "Pause Recording", "Clear History…", "Ignored Apps", "Theme", "About Pastu", "Settings…", "Quit Pastu"])
         }
+    }
+
+    /// The menu shows the shortcut the user chose, refreshed every time the menu opens.
+    @Test func showItemFollowsTheChosenShortcut() {
+        let hotKeys = HotKeySettings { _ in true }
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        defer { raw.releaseGlobally() }
+        let controller = makeController(pasteboard: raw, hotKeys: hotKeys)
+        controller.install(inStatusBar: false)
+        let menu = controller.menuForTesting
+        _ = hotKeys.set(HotKeyCombo(keyCode: 8, modifiers: [.command, .option]))
+        controller.menuNeedsUpdate(menu)
+        let show = menu.items.first { $0.title == "Show Pastu" }
+        #expect(show?.keyEquivalent == "c")
+        #expect(show?.keyEquivalentModifierMask == [.command, .option])
+        // An F key has no character to show: the item shows none rather than a wrong one.
+        _ = hotKeys.set(HotKeyCombo(keyCode: 122, modifiers: [.command, .shift]))
+        controller.menuNeedsUpdate(menu)
+        #expect(show?.keyEquivalent == "")
     }
 
     @Test func settingsItemShowsItsShortcutAndOpensTheWindow() {

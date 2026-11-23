@@ -8,7 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: ClipStore?
     private var monitor: ClipboardMonitor?
     private var panelController: PanelController?
-    private var hotKey: GlobalHotKey?
+    private let hotKeyRegistrar = HotKeyRegistrar()
+    private let hotKeys: HotKeySettings
     private let systemPasteboard: SystemPasteboard
     private let retention = RetentionPolicy()
     private let recording: RecordingState
@@ -24,11 +25,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ignoredApps = IgnoredApps(store: UserDefaults.standard)
         let theme = ThemeSettings(store: UserDefaults.standard)
         self.theme = theme
+        let registrar = hotKeyRegistrar
+        let hotKeys = HotKeySettings(store: UserDefaults.standard) { registrar.register($0) }
+        self.hotKeys = hotKeys
         self.systemPasteboard = systemPasteboard
         self.recording = recording
         self.ignoredApps = ignoredApps
-        statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme)
-        settingsWindow = SettingsWindowController(theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()))
+        statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme, hotKeys: hotKeys)
+        settingsWindow = SettingsWindowController(
+            theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()), hotKeys: hotKeys,
+            setHotKeySuspended: { registrar.isSuspended = $0 }
+        )
         super.init()
         statusMenu.showSettingsWindow = { [settingsWindow] in settingsWindow.show() }
         statusMenu.onShowPanel = { [weak self] in self?.panelController?.toggle() }
@@ -83,11 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusMenu.storageError = .open
         }
 
-        // ⌘⇧V
-        hotKey = GlobalHotKey(keyCode: kVK_ANSI_V, modifiers: cmdKey | shiftKey) { [weak self] in
-            self?.panelController?.toggle()
-        }
-        if hotKey == nil { NSLog("Pastu could not register its global hotkey") }
+        // The user's shortcut (⇧⌘V by default).
+        hotKeyRegistrar.action = { [weak self] in self?.panelController?.toggle() }
+        hotKeys.apply()
+        if hotKeys.errorMessage != nil { NSLog("Pastu could not register its global hotkey") }
 
         statusMenu.install()
 

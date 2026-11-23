@@ -20,7 +20,7 @@ extension ShellTests {
     ) -> SettingsWindowController {
         SettingsWindowController(
             theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem(status: loginStatus)),
-            glassAvailable: glassAvailable
+            hotKeys: HotKeySettings { _ in true }, glassAvailable: glassAvailable
         )
     }
 
@@ -105,6 +105,16 @@ extension ShellTests {
         try await Task.sleep(for: .milliseconds(300))
         let content = try #require(window.contentView)
         #expect(accessibilityElement(containing: "isn't available for this copy of Pastu", in: content) != nil)
+    }
+
+    @Test func theWindowShowsTheCurrentShortcut() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController().show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        #expect(accessibilityElement(containing: "⇧⌘V", in: content) != nil)
+        #expect(accessibilityElement(containing: "Reset", in: content) == nil, "no Reset while it is the default")
     }
 }
 }

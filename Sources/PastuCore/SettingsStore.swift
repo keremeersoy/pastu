@@ -33,4 +33,5 @@ enum DefaultsKeys {
     static let ignoredApps = "ignoredApps"
     static let panelAppearance = "panelAppearance"
     static let panelMaterial = "panelMaterial"
+    static let hotKey = "hotKey"
 }
