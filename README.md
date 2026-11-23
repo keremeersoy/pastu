@@ -61,9 +61,9 @@ yourself.
 | Esc | Clear the search first, then close |
 
 With the mouse: click a clip to select it, double click to paste it, right click for Paste, Copy, Pin, Delete and
-Ignore.
+Ignore (and Open in Preview for pictures), or drag a clip into another app.
 
-The menu bar icon lets you pause recording, clear the history and manage ignored apps.
+The menu bar icon lets you pause recording, clear the history, manage ignored apps and open Settings.
 
 <p align="center">
   <img src="docs/images/panel-pictures.png" width="640" alt="Pastu showing copied pictures with a large preview">
