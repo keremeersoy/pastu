@@ -6,11 +6,13 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController {
     private let theme: ThemeSettings
+    private let launchAtLogin: LaunchAtLogin
     private let glassAvailable: Bool
     private var window: NSWindow?
 
-    init(theme: ThemeSettings, glassAvailable: Bool = StatusMenuController.systemHasGlass) {
+    init(theme: ThemeSettings, launchAtLogin: LaunchAtLogin, glassAvailable: Bool = StatusMenuController.systemHasGlass) {
         self.theme = theme
+        self.launchAtLogin = launchAtLogin
         self.glassAvailable = glassAvailable
     }
 
@@ -26,7 +28,7 @@ final class SettingsWindowController {
         // The controller keeps the window; a window that frees itself on close would leave a dangling reference.
         window.isReleasedWhenClosed = false
         window.title = "Settings"
-        window.contentView = NSHostingView(rootView: SettingsView(theme: theme, glassAvailable: glassAvailable))
+        window.contentView = NSHostingView(rootView: SettingsView(theme: theme, launchAtLogin: launchAtLogin, glassAvailable: glassAvailable))
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window

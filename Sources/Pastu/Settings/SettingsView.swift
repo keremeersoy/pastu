@@ -1,14 +1,24 @@
 import PastuCore
 import SwiftUI
 
-/// The Settings window's content. For now only the panel theme; later settings get their own sections.
+/// The Settings window's content: starting at login and the panel theme. Later settings get their own sections.
 struct SettingsView: View {
     let theme: ThemeSettings
+    let launchAtLogin: LaunchAtLogin
     let glassAvailable: Bool
+    /// Opens System Settings at Login Items; replaceable for tests.
+    var openLoginItemsSettings: @MainActor () -> Void = SystemLoginItem.openLoginItemsSettings
 
     var body: some View {
         @Bindable var theme = theme
         Form {
+            Section("General") {
+                Toggle("Open Pastu at login", isOn: Binding(
+                    get: { launchAtLogin.isOn }, set: { launchAtLogin.setEnabled($0) }
+                ))
+                .disabled(!launchAtLogin.isAvailable)
+                loginNote
+            }
             Section("Appearance") {
                 Picker("Appearance", selection: $theme.appearance) {
                     ForEach(PanelAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -23,8 +33,28 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // The user can change the login item in System Settings while this window is open.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            launchAtLogin.refresh()
+        }
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var loginNote: some View {
+        if let message = launchAtLogin.errorMessage {
+            Text(message).font(.footnote).foregroundStyle(.red)
+        } else if !launchAtLogin.isAvailable {
+            Text("Starting at login isn't available for this copy of Pastu. Move Pastu.app to your Applications folder.")
+                .font(.footnote).foregroundStyle(.secondary)
+        } else if launchAtLogin.needsApproval {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Allow Pastu in System Settings → General → Login Items to finish.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("Open Login Items Settings", action: openLoginItemsSettings)
+            }
+        }
     }
 
     private func materialBinding(_ stored: Binding<PanelMaterial>) -> Binding<PanelMaterial> {

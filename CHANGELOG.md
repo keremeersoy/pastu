@@ -7,7 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- A Settings window ("Settings…" in the menu bar menu). For now it holds the panel theme; more settings follow.
+- A Settings window ("Settings…" in the menu bar menu) with the panel theme and "Open Pastu at login". More settings follow.
 
 ## [0.2.0] - 2026-11-23
 

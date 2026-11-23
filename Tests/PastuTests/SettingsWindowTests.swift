@@ -3,11 +3,25 @@ import Testing
 @testable import Pastu
 @testable import PastuCore
 
+/// Stands in for `SMAppService`: tests must never register the real app as a login item.
+@MainActor
+final class StubLoginItem: LoginItemService {
+    var status: LoginItemStatus
+    init(status: LoginItemStatus = .disabled) { self.status = status }
+    func register() throws { status = .enabled }
+    func unregister() throws { status = .disabled }
+}
+
 extension ShellTests {
 @MainActor
 @Suite struct SettingsWindowTests {
-    private func makeController(glassAvailable: Bool = true) -> SettingsWindowController {
-        SettingsWindowController(theme: ThemeSettings(), glassAvailable: glassAvailable)
+    private func makeController(
+        glassAvailable: Bool = true, loginStatus: LoginItemStatus = .disabled
+    ) -> SettingsWindowController {
+        SettingsWindowController(
+            theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem(status: loginStatus)),
+            glassAvailable: glassAvailable
+        )
     }
 
     @Test func showOpensAWindowTitledSettings() throws {
@@ -63,6 +77,34 @@ extension ShellTests {
         try await Task.sleep(for: .milliseconds(300))
         let content = try #require(window.contentView)
         #expect(accessibilityElement(containing: "Liquid Glass", in: content) == nil)
+    }
+
+    @Test func theWindowOffersOpenAtLogin() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController().show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        #expect(accessibilityElement(containing: "Open Pastu at login", in: content) != nil)
+        #expect(accessibilityElement(containing: "System Settings → General → Login Items", in: content) == nil)
+    }
+
+    @Test func aPendingApprovalPointsToSystemSettings() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController(loginStatus: .requiresApproval).show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        #expect(accessibilityElement(containing: "System Settings → General → Login Items", in: content) != nil)
+    }
+
+    @Test func anUnavailableLoginItemSaysSo() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController(loginStatus: .unavailable).show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        #expect(accessibilityElement(containing: "isn't available for this copy of Pastu", in: content) != nil)
     }
 }
 }

@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.recording = recording
         self.ignoredApps = ignoredApps
         statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme)
-        settingsWindow = SettingsWindowController(theme: theme)
+        settingsWindow = SettingsWindowController(theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()))
         super.init()
         statusMenu.showSettingsWindow = { [settingsWindow] in settingsWindow.show() }
         statusMenu.onShowPanel = { [weak self] in self?.panelController?.toggle() }
