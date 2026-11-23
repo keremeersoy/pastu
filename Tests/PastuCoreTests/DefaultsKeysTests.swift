@@ -11,6 +11,10 @@ import Testing
         #expect(DefaultsKeys.ignoredApps == "ignoredApps")
         #expect(DefaultsKeys.panelAppearance == "panelAppearance")
         #expect(DefaultsKeys.panelMaterial == "panelMaterial")
+        #expect(DefaultsKeys.hotKey == "hotKey")
+        #expect(DefaultsKeys.retentionCount == "retentionCount")
+        #expect(DefaultsKeys.retentionAgeDays == "retentionAgeDays")
+        #expect(DefaultsKeys.retentionSizeMB == "retentionSizeMB")
     }
 
     @Test func pauseIsStoredUnderItsKey() {

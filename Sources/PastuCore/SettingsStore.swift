@@ -34,4 +34,7 @@ enum DefaultsKeys {
     static let panelAppearance = "panelAppearance"
     static let panelMaterial = "panelMaterial"
     static let hotKey = "hotKey"
+    static let retentionCount = "retentionCount"
+    static let retentionAgeDays = "retentionAgeDays"
+    static let retentionSizeMB = "retentionSizeMB"
 }

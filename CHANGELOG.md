@@ -7,7 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- A Settings window ("Settings…" in the menu bar menu) with the panel theme, "Open Pastu at login" and a changeable global shortcut. More settings follow.
+- A Settings window ("Settings…" in the menu bar menu) with the panel theme, "Open Pastu at login", a changeable global shortcut and history limits (clip count, age, size). More settings follow.
 
 ## [0.2.0] - 2026-11-23
 

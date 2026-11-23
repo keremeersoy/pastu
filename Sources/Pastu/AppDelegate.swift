@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeyRegistrar = HotKeyRegistrar()
     private let hotKeys: HotKeySettings
     private let systemPasteboard: SystemPasteboard
-    private let retention = RetentionPolicy()
+    private let retention: RetentionSettings
     private let recording: RecordingState
     private let ignoredApps: IgnoredApps
     private let theme: ThemeSettings
@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ignoredApps = IgnoredApps(store: UserDefaults.standard)
         let theme = ThemeSettings(store: UserDefaults.standard)
         self.theme = theme
+        let retention = RetentionSettings(store: UserDefaults.standard)
+        self.retention = retention
         let registrar = hotKeyRegistrar
         let hotKeys = HotKeySettings(store: UserDefaults.standard) { registrar.register($0) }
         self.hotKeys = hotKeys
@@ -33,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.ignoredApps = ignoredApps
         statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme, hotKeys: hotKeys)
         settingsWindow = SettingsWindowController(
-            theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()), hotKeys: hotKeys,
+            theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()), hotKeys: hotKeys, retention: retention,
             setHotKeySuspended: { registrar.isSuspended = $0 }
         )
         super.init()
@@ -45,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let store = try ClipStore(path: AppPaths.databasePath())
             self.store = store
-            try store.prune(retention)
+            try store.prune(retention.policy)
             let model = ClipListModel(store: store)
             statusMenu.store = store
             statusMenu.model = model
@@ -72,7 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 do {
                     try store.insert(clip)
-                    try store.prune(self.retention)
+                    try store.prune(self.retention.policy)
                     self.statusMenu.storageError = nil
                 } catch {
                     NSLog("Pastu could not save a clip: \(error)")

@@ -20,7 +20,7 @@ extension ShellTests {
     ) -> SettingsWindowController {
         SettingsWindowController(
             theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem(status: loginStatus)),
-            hotKeys: HotKeySettings { _ in true }, glassAvailable: glassAvailable
+            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), glassAvailable: glassAvailable
         )
     }
 
@@ -115,6 +115,17 @@ extension ShellTests {
         let content = try #require(window.contentView)
         #expect(accessibilityElement(containing: "⇧⌘V", in: content) != nil)
         #expect(accessibilityElement(containing: "Reset", in: content) == nil, "no Reset while it is the default")
+    }
+
+    @Test func theWindowShowsTheHistoryLimits() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController().show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        for text in ["Keep up to", "Keep for", "Size limit", "5,000 clips", "90 days", "200 MB", "never deleted"] {
+            #expect(accessibilityElement(containing: text, in: content) != nil, "missing \(text)")
+        }
     }
 }
 }

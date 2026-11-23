@@ -6,6 +6,7 @@ struct SettingsView: View {
     let theme: ThemeSettings
     let launchAtLogin: LaunchAtLogin
     let hotKeys: HotKeySettings
+    let retention: RetentionSettings
     let recorder: ShortcutRecorder
     let glassAvailable: Bool
     /// Opens System Settings at Login Items; replaceable for tests.
@@ -13,6 +14,7 @@ struct SettingsView: View {
 
     var body: some View {
         @Bindable var theme = theme
+        @Bindable var retention = retention
         Form {
             Section("General") {
                 Toggle("Open Pastu at login", isOn: Binding(
@@ -40,6 +42,19 @@ struct SettingsView: View {
                     Text(recorder.isRecording ? "Press the new shortcut, or Esc to cancel." : "Click the shortcut to change it.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+            }
+            Section("History") {
+                Picker("Keep up to", selection: $retention.count) {
+                    ForEach(RetentionSettings.countChoices, id: \.self) { Text(RetentionSettings.countTitle($0)).tag($0) }
+                }
+                Picker("Keep for", selection: $retention.age) {
+                    ForEach(RetentionSettings.ageChoices, id: \.self) { Text(RetentionSettings.ageTitle($0)).tag($0) }
+                }
+                Picker("Size limit", selection: $retention.size) {
+                    ForEach(RetentionSettings.sizeChoices, id: \.self) { Text(RetentionSettings.sizeTitle($0)).tag($0) }
+                }
+                Text("Clips over a limit are deleted the next time Pastu saves a copy or starts. Pinned clips are never deleted.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Appearance") {
                 Picker("Appearance", selection: $theme.appearance) {
