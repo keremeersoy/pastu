@@ -49,7 +49,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu.onShowPanel = { [weak self] in self?.panelController?.toggle() }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        PreviewOpener.shared.cleanUp()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Leftovers of "Open in Preview" from a run that did not quit cleanly.
+        PreviewOpener.shared.cleanUp()
         do {
             let store = try ClipStore(path: AppPaths.databasePath())
             self.store = store

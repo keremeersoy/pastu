@@ -6,6 +6,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Drag a clip out of the panel into another app: text drops as text, a picture as a PNG file.
+- "Open in Preview" in a picture's right-click menu. The copy it opens is removed when Pastu starts and quits.
+
 ### Changed
 - Picture thumbnails are decoded off the main thread, so opening the panel on a history full of screenshots no longer stalls (a retina screenshot took about 15 ms each on the main thread).
 

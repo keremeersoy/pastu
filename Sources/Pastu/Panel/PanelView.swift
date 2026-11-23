@@ -142,6 +142,9 @@ struct PanelView: View {
     private func rowMenu(for clip: StoredClip) -> some View {
         Button("Paste") { act(on: clip, onSubmit) }
         Button("Copy") { act(on: clip, onCopyOnly) }
+        if clip.kind == .image {
+            Button("Open in Preview") { act(on: clip) { PreviewOpener.shared.open(clip, imageData: imageData) } }
+        }
         Divider()
         Button(clip.isPinned ? "Unpin" : "Pin") { act(on: clip, model.togglePinSelected) }
         Button("Delete") {
@@ -175,6 +178,8 @@ struct PanelView: View {
                             .onTapGesture { act(on: clip) {} }
                             .simultaneousGesture(TapGesture(count: 2).onEnded { act(on: clip, onSubmit) })
                             .contextMenu { rowMenu(for: clip) }
+                            // Drag a clip into another app: text as text, a picture as a PNG.
+                            .onDrag { ClipDragItem.provider(for: clip, imageData: imageData) }
                             // Reaching the last row by scrolling loads the next page. `loadMore` is a no-op once the
                             // history is exhausted and appends synchronously, so it cannot loop: the appended rows
                             // push this row off the end and only the new last row triggers again.
