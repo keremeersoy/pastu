@@ -9,16 +9,19 @@ final class SettingsWindowController {
     private let launchAtLogin: LaunchAtLogin
     private let hotKeys: HotKeySettings
     private let retention: RetentionSettings
+    private let ignoredApps: IgnoredApps
     private let setHotKeySuspended: (Bool) -> Void
     private let glassAvailable: Bool
     private var window: NSWindow?
 
-    init(theme: ThemeSettings, launchAtLogin: LaunchAtLogin, hotKeys: HotKeySettings, retention: RetentionSettings, setHotKeySuspended: @escaping (Bool) -> Void = { _ in },
+    init(theme: ThemeSettings, launchAtLogin: LaunchAtLogin, hotKeys: HotKeySettings, retention: RetentionSettings, ignoredApps: IgnoredApps,
+         setHotKeySuspended: @escaping (Bool) -> Void = { _ in },
          glassAvailable: Bool = StatusMenuController.systemHasGlass) {
         self.theme = theme
         self.launchAtLogin = launchAtLogin
         self.hotKeys = hotKeys
         self.retention = retention
+        self.ignoredApps = ignoredApps
         self.setHotKeySuspended = setHotKeySuspended
         self.glassAvailable = glassAvailable
     }
@@ -36,7 +39,7 @@ final class SettingsWindowController {
         window.isReleasedWhenClosed = false
         window.title = "Settings"
         window.contentView = NSHostingView(rootView: SettingsView(
-            theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention,
+            theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps,
             recorder: ShortcutRecorder(hotKeys: hotKeys, setSuspended: setHotKeySuspended),
             glassAvailable: glassAvailable
         ))

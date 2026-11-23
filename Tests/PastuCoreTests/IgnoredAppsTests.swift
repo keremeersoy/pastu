@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import PastuCore
 
@@ -68,5 +69,20 @@ import Testing
         apps.add("com.zeta")
         apps.add("com.alpha")
         #expect(apps.sortedIdentifiers == ["com.alpha", "com.zeta"])
+    }
+}
+
+@MainActor
+@Suite struct IgnoredAppsObservationTests {
+    /// The Settings list shows these identifiers, so adding or removing one elsewhere must redraw it.
+    @Test func addingAndRemovingAreObservable() {
+        let apps = IgnoredApps()
+        let changes = ChangeCounter()
+        withObservationTracking { _ = apps.bundleIdentifiers } onChange: { changes.count += 1 }
+        apps.add("com.example.vault")
+        #expect(changes.count == 1)
+        withObservationTracking { _ = apps.bundleIdentifiers } onChange: { changes.count += 1 }
+        apps.remove("com.example.vault")
+        #expect(changes.count == 2)
     }
 }

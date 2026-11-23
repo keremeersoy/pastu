@@ -1,14 +1,15 @@
 import Foundation
+import Observation
 
 /// Apps whose copies Pastu must never record or even read (password managers, banking apps, …).
 /// Persisted in a `SettingsStore`.
-@MainActor
+@MainActor @Observable
 public final class IgnoredApps {
-    private let store: SettingsStore?
+    @ObservationIgnored private let store: SettingsStore?
     private static let key = DefaultsKeys.ignoredApps
 
     /// Called with the new set after every real change (not for no-ops).
-    public var onChange: ((Set<String>) -> Void)?
+    @ObservationIgnored public var onChange: ((Set<String>) -> Void)?
     public private(set) var bundleIdentifiers: Set<String>
     public var sortedIdentifiers: [String] { bundleIdentifiers.sorted() }
 

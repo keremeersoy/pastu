@@ -35,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.ignoredApps = ignoredApps
         statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme, hotKeys: hotKeys)
         settingsWindow = SettingsWindowController(
-            theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()), hotKeys: hotKeys, retention: retention,
+            theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()), hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps,
             setHotKeySuspended: { registrar.isSuspended = $0 }
         )
         super.init()

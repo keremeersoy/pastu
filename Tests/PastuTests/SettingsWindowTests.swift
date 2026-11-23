@@ -20,7 +20,8 @@ extension ShellTests {
     ) -> SettingsWindowController {
         SettingsWindowController(
             theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem(status: loginStatus)),
-            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), glassAvailable: glassAvailable
+            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: IgnoredApps(),
+            glassAvailable: glassAvailable
         )
     }
 

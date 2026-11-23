@@ -7,6 +7,7 @@ struct SettingsView: View {
     let launchAtLogin: LaunchAtLogin
     let hotKeys: HotKeySettings
     let retention: RetentionSettings
+    let ignoredApps: IgnoredApps
     let recorder: ShortcutRecorder
     let glassAvailable: Bool
     /// Opens System Settings at Login Items; replaceable for tests.
@@ -54,6 +55,27 @@ struct SettingsView: View {
                     ForEach(RetentionSettings.sizeChoices, id: \.self) { Text(RetentionSettings.sizeTitle($0)).tag($0) }
                 }
                 Text("Clips over a limit are deleted the next time Pastu saves a copy or starts. Pinned clips are never deleted.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("Ignored Apps") {
+                if ignoredApps.sortedIdentifiers.isEmpty {
+                    Text("None. Press ⌘I on a clip in the panel, or add an app here.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                ForEach(ignoredApps.sortedIdentifiers, id: \.self) { id in
+                    let name = AppLookup.name(for: id) ?? id
+                    LabeledContent {
+                        Button("Remove") { ignoredApps.remove(id) }
+                            .accessibilityLabel("Stop ignoring \(id)")
+                    } label: {
+                        Text(name)
+                        if name != id { Text(id).font(.footnote).foregroundStyle(.secondary) }
+                    }
+                }
+                Button("Add App…") {
+                    if let id = IgnoredAppChoice.chooseApp() { ignoredApps.add(id) }
+                }
+                Text("Copies from these apps are never read or saved.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Appearance") {
