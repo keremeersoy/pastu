@@ -40,7 +40,20 @@ import Testing
     @Test func itemsFollowTheHIGOrder() {
         withMenu { _, menu in
             let titles = menu.items.filter { !$0.isHidden && !$0.isSeparatorItem }.map(\.title)
-            #expect(titles == ["Show Pastu", "Pause Recording", "Clear History…", "Ignored Apps", "Theme", "About Pastu", "Quit Pastu"])
+            #expect(titles == ["Show Pastu", "Pause Recording", "Clear History…", "Ignored Apps", "Theme", "About Pastu", "Settings…", "Quit Pastu"])
+        }
+    }
+
+    @Test func settingsItemShowsItsShortcutAndOpensTheWindow() {
+        withMenu { controller, menu in
+            let item = menu.items.first { $0.title == "Settings…" }
+            #expect(item?.keyEquivalent == ",")
+            #expect(item?.keyEquivalentModifierMask == [.command])
+            _ = NSApplication.shared
+            var opened = 0
+            controller.showSettingsWindow = { opened += 1; return nil }
+            if let item, let action = item.action { _ = NSApp.sendAction(action, to: item.target, from: item) }
+            #expect(opened == 1)
         }
     }
 
@@ -70,6 +83,7 @@ import Testing
 
     /// A click on a menu item: the same action message the menu sends.
     private func choose(_ item: NSMenuItem) {
+        _ = NSApplication.shared
         if let action = item.action { _ = NSApp.sendAction(action, to: item.target, from: item) }
     }
 
@@ -236,5 +250,20 @@ import Testing
         controller.showAbout()
         about.close()
         #expect(reactivated().isEmpty)
+    }
+
+    @Test func closingTheSettingsWindowGivesFocusBackOnce() throws {
+        let previous = try otherApp()
+        let (controller, reactivated) = focusController(previous: previous)
+        let settings = aboutWindow()
+        controller.showSettingsWindow = { settings }
+        controller.showSettings()
+        controller.showSettingsWindow = { nil }
+        controller.showSettings()
+        #expect(reactivated().isEmpty)
+        settings.close()
+        #expect(reactivated() == [previous])
+        settings.close()
+        #expect(reactivated() == [previous])
     }
 }

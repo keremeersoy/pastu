@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import PastuCore
 
@@ -70,5 +71,28 @@ import Testing
     @Test func menuTitlesAreStable() {
         #expect(PanelAppearance.allCases.map(\.title) == ["System", "Light", "Dark"])
         #expect(PanelMaterial.allCases.map(\.title) == ["Liquid Glass", "Frosted", "Solid"])
+    }
+}
+
+/// `onChange` runs synchronously on the thread that made the change, so a plain counter is safe here.
+final class ChangeCounter: @unchecked Sendable { var count = 0 }
+
+@MainActor
+@Suite struct ThemeSettingsObservationTests {
+    /// The settings window binds to `ThemeSettings`, so a change made elsewhere (the menu) must reach the view.
+    @Test func changingTheAppearanceIsObservable() {
+        let theme = ThemeSettings()
+        let changes = ChangeCounter()
+        withObservationTracking { _ = theme.appearance } onChange: { changes.count += 1 }
+        theme.appearance = .dark
+        #expect(changes.count == 1)
+    }
+
+    @Test func changingTheMaterialIsObservable() {
+        let theme = ThemeSettings()
+        let changes = ChangeCounter()
+        withObservationTracking { _ = theme.material } onChange: { changes.count += 1 }
+        theme.material = .solid
+        #expect(changes.count == 1)
     }
 }

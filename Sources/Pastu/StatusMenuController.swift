@@ -43,6 +43,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var runAlert: (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }
     /// Shows the About window and returns it, or nil when it was open already; replaceable for tests.
     var showAboutPanel: @MainActor () -> NSWindow? = StatusMenuController.orderFrontAboutPanel
+    /// Shows the Settings window and returns it, or nil when it was open already; set by the app delegate.
+    var showSettingsWindow: @MainActor () -> NSWindow? = { nil }
 
     private let recording: RecordingState
     private let ignoredApps: IgnoredApps
@@ -50,7 +52,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let theme: ThemeSettings
     private let glassAvailable: Bool
 
-    private var appBeforeAbout: NSRunningApplication?
+    private var appBeforeWindow: NSRunningApplication?
     private var statusItem: NSStatusItem?
     private var accessWarningItem: NSMenuItem?
     private var storageWarningItem: NSMenuItem?
@@ -137,6 +139,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "About \(PastuInfo.name)", action: #selector(showAbout), keyEquivalent: "")
             .target = self
+        // Display only, like ⌘⇧V above: the menu is the only place it is shown.
+        menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+            .target = self
         menu.addItem(
             withTitle: "Quit \(PastuInfo.name)",
             action: #selector(NSApplication.terminate(_:)),
@@ -220,21 +225,30 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     @objc func showAbout() {
+        present(showAboutPanel)
+    }
+
+    @objc func showSettings() {
+        present(showSettingsWindow)
+    }
+
+    /// Brings Pastu forward, shows a window, and gives focus back to the previous app when that window closes.
+    private func present(_ show: @MainActor () -> NSWindow?) {
         let previous = activatePastu()
         // Nil when it is open already: the app to go back to was remembered the first time.
-        guard let window = showAboutPanel() else { return }
-        appBeforeAbout = previous
+        guard let window = show() else { return }
+        appBeforeWindow = previous
         NotificationCenter.default.addObserver(
-            self, selector: #selector(aboutWillClose(_:)), name: NSWindow.willCloseNotification, object: window
+            self, selector: #selector(presentedWindowWillClose(_:)), name: NSWindow.willCloseNotification, object: window
         )
     }
 
-    @objc private func aboutWillClose(_ notification: Notification) {
+    @objc private func presentedWindowWillClose(_ notification: Notification) {
         NotificationCenter.default.removeObserver(
             self, name: NSWindow.willCloseNotification, object: notification.object
         )
-        giveFocusBack(to: appBeforeAbout)
-        appBeforeAbout = nil
+        giveFocusBack(to: appBeforeWindow)
+        appBeforeWindow = nil
     }
 
     /// Brings Pastu to the front and returns the app that was there, for `giveFocusBack`.

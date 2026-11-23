@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Light or dark look of the panel; `system` follows macOS.
 public enum PanelAppearance: String, CaseIterable, Sendable {
@@ -44,7 +45,8 @@ public enum PanelMaterial: String, CaseIterable, Sendable {
 
 /// The user's panel theme, optionally persisted in a `SettingsStore`.
 /// An unknown or missing stored value means the default: system appearance, Liquid Glass.
-@MainActor
+/// Observable, so the settings window and the menu show the same choice whichever one changed it.
+@MainActor @Observable
 public final class ThemeSettings {
     private let store: SettingsStore?
 

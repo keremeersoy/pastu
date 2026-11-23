@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let ignoredApps: IgnoredApps
     private let theme: ThemeSettings
     private let statusMenu: StatusMenuController
+    private let settingsWindow: SettingsWindowController
     private let pasteCoordinator = PasteCoordinator()
 
     override init() {
@@ -27,7 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.recording = recording
         self.ignoredApps = ignoredApps
         statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme)
+        settingsWindow = SettingsWindowController(theme: theme)
         super.init()
+        statusMenu.showSettingsWindow = { [settingsWindow] in settingsWindow.show() }
         statusMenu.onShowPanel = { [weak self] in self?.panelController?.toggle() }
     }
 

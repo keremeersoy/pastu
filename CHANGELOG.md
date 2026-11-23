@@ -6,6 +6,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- A Settings window ("Settings…" in the menu bar menu). For now it holds the panel theme; more settings follow.
+
 ## [0.2.0] - 2026-11-23
 
 ### Added
