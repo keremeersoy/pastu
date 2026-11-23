@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-23
+
 ### Added
 - A three-step welcome guide on first launch (what Pastu does, letting it paste, open at login). Reopen it with "Show Welcome Guide…" in Settings.
 - ⌘Z in the panel restores clips you deleted (up to 20, kept in memory only until the panel closes).
@@ -88,7 +90,8 @@ Tagged but never released: the release build stopped on the flaky test fixed in 
 - Text containing NUL characters is stored whole instead of being truncated (which could merge different clips).
 - Deleted and pruned clips are overwritten in the database file (`secure_delete`).
 
-[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/keremeersoy/pastu/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/keremeersoy/pastu/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/keremeersoy/pastu/releases/tag/v0.1.1
 [0.1.0]: https://github.com/keremeersoy/pastu/tree/v0.1.0
