@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-23
+
 ### Added
 - Paste queue: ⌥↩ collects the selected clip (up to 20) and moves to the next row, ⌘↩ pastes the queue one clip after another, with a new line, space, tab or nothing between text clips (Settings). Queued rows show their number, the footer has a Clear button, and the queue lives in memory only.
 - Drag a clip out of the panel into another app: text drops as text, a picture as a PNG file.
@@ -98,7 +100,8 @@ Tagged but never released: the release build stopped on the flaky test fixed in 
 - Text containing NUL characters is stored whole instead of being truncated (which could merge different clips).
 - Deleted and pruned clips are overwritten in the database file (`secure_delete`).
 
-[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/keremeersoy/pastu/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/keremeersoy/pastu/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/keremeersoy/pastu/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/keremeersoy/pastu/releases/tag/v0.1.1
