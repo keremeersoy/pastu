@@ -16,6 +16,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let onResume: () -> Void
     private let openAccessibilitySettings: () -> Void
     private let onCopy: (StoredClip) -> Void
+    private let theme: ThemeSettings
     let panel = ClipPanel(size: PanelController.size)
     /// Watches ⌘ only while the panel is visible (started in `show`, stopped in `hide`).
     let commandKeys = CommandKeyMonitor()
@@ -30,6 +31,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// - Parameter onResume: the paused banner's "Resume" button.
     /// - Parameter openAccessibilitySettings: the Accessibility banner's "Enable…" button; the panel hides first.
     /// - Parameter onCopy: the row menu's "Copy"; called after the panel closed, like `onSelect` but without ⌘V.
+    /// - Parameter theme: appearance and material, read each time the panel opens.
     init(
         model: ClipListModel,
         canAutoPaste: @escaping () -> Bool,
@@ -39,6 +41,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         onResume: @escaping () -> Void = {},
         openAccessibilitySettings: @escaping () -> Void = SystemSettings.openAccessibility,
         onCopy: @escaping (StoredClip) -> Void = { _ in },
+        theme: ThemeSettings = ThemeSettings(),
         onSelect: @escaping (StoredClip) -> Void
     ) {
         self.model = model
@@ -49,6 +52,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         self.onResume = onResume
         self.openAccessibilitySettings = openAccessibilitySettings
         self.onCopy = onCopy
+        self.theme = theme
         self.onSelect = onSelect
         super.init()
         panel.delegate = self
@@ -74,8 +78,17 @@ final class PanelController: NSObject, NSWindowDelegate {
         isVisible ? hide() : show()
     }
 
+    /// The shell style for the current material choice.
+    var panelStyle: PanelStyle { PanelStyle(material: theme.material) }
+
     func show() {
         model.resetForShow()
+        // Nil follows the system; a menu choice made while the panel was hidden shows up now.
+        panel.appearance = switch theme.appearance {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
         PanelCaches.retainOnly(Set(model.clips.map(\.id)))
         // A fresh view each time resets focus and scroll position.
         panel.contentView = NSHostingView(rootView: PanelView(
@@ -93,7 +106,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             },
             imageData: imageData,
             commandKeys: commandKeys
-        ))
+        ).environment(\.panelStyle, panelStyle))
         // The shadow of a borderless, transparent window is traced from its drawn pixels: draw the
         // rounded shell first, then recompute the shadow so it follows the corners, not the square frame.
         panel.displayIfNeeded()

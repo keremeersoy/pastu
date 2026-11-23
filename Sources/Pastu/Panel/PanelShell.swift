@@ -1,11 +1,25 @@
+import PastuCore
 import SwiftUI
 
 /// How the panel shell is drawn. One value so tests on a macOS 26 machine can also render the macOS 15 look.
 enum PanelStyle: Sendable {
     /// Liquid Glass (macOS 26+).
     case glass
-    /// A behind-window `NSVisualEffectView` (macOS 15).
+    /// A behind-window `NSVisualEffectView` (macOS 15, or chosen as "Frosted").
     case legacy
+    /// An opaque fill, chosen as "Solid". Reduce Transparency gives the same look whatever the style.
+    case solid
+
+    /// The style for the user's material choice; Liquid Glass becomes the legacy look where it does not exist.
+    init(material: PanelMaterial) {
+        let glassAvailable: Bool
+        if #available(macOS 26, *) { glassAvailable = true } else { glassAvailable = false }
+        switch material.resolved(glassAvailable: glassAvailable) {
+        case .glass: self = .glass
+        case .frosted: self = .legacy
+        case .solid: self = .solid
+        }
+    }
 
     static var system: PanelStyle {
         if #available(macOS 26, *) { .glass } else { .legacy }
@@ -49,7 +63,7 @@ private struct PanelShellModifier: ViewModifier {
 
     @ViewBuilder
     private func background(_ content: some View) -> some View {
-        if reduceTransparency {
+        if reduceTransparency || style == .solid {
             content.background(Color(nsColor: .windowBackgroundColor), in: shape)
         } else if style == .glass, #available(macOS 26, *) {
             content.glassEffect(.regular, in: shape)

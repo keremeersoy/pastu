@@ -253,6 +253,59 @@ extension ShellTests {
         #expect(containsVisualEffectView(content))
     }
 
+    // MARK: Theme
+
+    @Test func materialsMapToShellStyles() {
+        #expect(PanelStyle(material: .solid) == .solid)
+        #expect(PanelStyle(material: .frosted) == .legacy)
+        #expect(PanelStyle(material: .glass) == .system)
+    }
+
+    /// The solid material is an opaque fill even when the system does not ask for Reduce Transparency.
+    @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
+    func panelRendersSolidStyle(appearance: NSAppearance.Name) async throws {
+        let view = PanelView(model: try sampleModel(), canAutoPaste: true, onSubmit: {})
+            .environment(\.panelStyle, .solid)
+            .environment(\._accessibilityReduceTransparency, false)
+        let (image, content) = try await renderWindow(view, appearance: appearance)
+        save(image, name: "panel-solid-\(appearance == .aqua ? "light" : "dark")")
+        #expect(try alpha(in: image, atPoint: CGPoint(x: 2, y: 2)) == 0)
+        #expect(try alpha(in: image, atPoint: headerCenter) == 1)
+        #expect(!containsVisualEffectView(content))
+    }
+
+    @Test func controllerAppliesTheChosenAppearanceEachTimeItShows() throws {
+        let theme = ThemeSettings()
+        let controller = PanelController(
+            model: ClipListModel(store: try ClipStore()), canAutoPaste: { true }, theme: theme, onSelect: { _ in }
+        )
+        defer { controller.hide() }
+        theme.appearance = .dark
+        controller.show()
+        #expect(controller.panel.appearance?.name == .darkAqua)
+        controller.hide()
+        theme.appearance = .light
+        controller.show()
+        #expect(controller.panel.appearance?.name == .aqua)
+        controller.hide()
+        theme.appearance = .system
+        controller.show()
+        #expect(controller.panel.appearance == nil)
+    }
+
+    @Test func controllerDrawsTheChosenMaterial() throws {
+        let theme = ThemeSettings()
+        let controller = PanelController(
+            model: ClipListModel(store: try ClipStore()), canAutoPaste: { true }, theme: theme, onSelect: { _ in }
+        )
+        theme.material = .solid
+        #expect(controller.panelStyle == .solid)
+        theme.material = .frosted
+        #expect(controller.panelStyle == .legacy)
+        theme.material = .glass
+        #expect(controller.panelStyle == .system)
+    }
+
     @Test(arguments: [NSAppearance.Name.darkAqua, .aqua])
     func panelRendersWithReduceTransparency(appearance: NSAppearance.Name) async throws {
         let view = PanelView(model: try sampleModel(), canAutoPaste: true, onSubmit: {})
