@@ -11,6 +11,9 @@ final class SettingsWindowController {
     private let retention: RetentionSettings
     private let ignoredApps: IgnoredApps
     private let queueSettings: QueueSettings
+    private let pictureText: PictureTextSettings
+    /// Set by the app delegate once the indexer exists: "Find text in pictures" was switched on.
+    var onPictureTextEnabled: () -> Void = {}
     /// "Show Welcome Guide…"; set by the app delegate once it exists.
     var showWelcome: () -> Void = {}
     private let setHotKeySuspended: (Bool) -> Void
@@ -18,7 +21,7 @@ final class SettingsWindowController {
     private var window: NSWindow?
 
     init(theme: ThemeSettings, launchAtLogin: LaunchAtLogin, hotKeys: HotKeySettings, retention: RetentionSettings, ignoredApps: IgnoredApps,
-         queueSettings: QueueSettings, setHotKeySuspended: @escaping (Bool) -> Void = { _ in },
+         queueSettings: QueueSettings, pictureText: PictureTextSettings, setHotKeySuspended: @escaping (Bool) -> Void = { _ in },
          glassAvailable: Bool = StatusMenuController.systemHasGlass) {
         self.theme = theme
         self.launchAtLogin = launchAtLogin
@@ -26,6 +29,7 @@ final class SettingsWindowController {
         self.retention = retention
         self.ignoredApps = ignoredApps
         self.queueSettings = queueSettings
+        self.pictureText = pictureText
         self.setHotKeySuspended = setHotKeySuspended
         self.glassAvailable = glassAvailable
     }
@@ -43,7 +47,8 @@ final class SettingsWindowController {
         window.isReleasedWhenClosed = false
         window.title = "Settings"
         window.contentView = NSHostingView(rootView: SettingsView(
-            theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps, queueSettings: queueSettings, showWelcome: { [weak self] in self?.showWelcome() },
+            theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps, queueSettings: queueSettings, pictureText: pictureText,
+            onPictureTextEnabled: { [weak self] in self?.onPictureTextEnabled() }, showWelcome: { [weak self] in self?.showWelcome() },
             recorder: ShortcutRecorder(hotKeys: hotKeys, setSuspended: setHotKeySuspended),
             glassAvailable: glassAvailable
         ))

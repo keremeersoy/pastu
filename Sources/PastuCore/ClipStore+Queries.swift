@@ -58,7 +58,9 @@ extension ClipStore {
             binds.append(Self.ftsMatchExpression(for: indexed))
         }
         for term in short {
-            conditions.append("instr(lower(c.text), lower(?\(binds.count + 3))) > 0")
+            // Pictures also match on the text recognised in them.
+            let slot = binds.count + 3
+            conditions.append("(instr(lower(c.text), lower(?\(slot))) > 0 OR instr(lower(COALESCE(c.ocr_text, '')), lower(?\(slot))) > 0)")
             binds.append(term)
         }
 

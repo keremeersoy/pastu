@@ -20,7 +20,7 @@ extension ShellTests {
     ) -> SettingsWindowController {
         SettingsWindowController(
             theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem(status: loginStatus)),
-            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: IgnoredApps(), queueSettings: QueueSettings(),
+            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: IgnoredApps(), queueSettings: QueueSettings(), pictureText: PictureTextSettings(),
             glassAvailable: glassAvailable
         )
     }
@@ -152,6 +152,16 @@ extension ShellTests {
         for text in ["Between clips", "New line"] {
             #expect(accessibilityElement(containing: text, in: content) != nil, "missing \(text)")
         }
+    }
+
+    @Test func theWindowOffersTextSearchInPictures() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController().show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        #expect(accessibilityElement(containing: "Find text in pictures", in: content) != nil)
+        #expect(accessibilityElement(containing: "nothing is sent anywhere", in: content) != nil)
     }
 }
 }

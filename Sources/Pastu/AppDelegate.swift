@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settingsWindow: SettingsWindowController
     private let onboarding: Onboarding
     private let queueSettings: QueueSettings
+    private let pictureText: PictureTextSettings
+    private var indexer: PictureIndexer?
     private let launchAtLogin = LaunchAtLogin(service: SystemLoginItem())
     private var onboardingWindow: OnboardingWindowController?
     private let pasteCoordinator = PasteCoordinator()
@@ -31,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.theme = theme
         let queueSettings = QueueSettings(store: UserDefaults.standard)
         self.queueSettings = queueSettings
+        let pictureText = PictureTextSettings(store: UserDefaults.standard)
+        self.pictureText = pictureText
         let onboarding = Onboarding(store: UserDefaults.standard)
         self.onboarding = onboarding
         let retention = RetentionSettings(store: UserDefaults.standard)
@@ -44,12 +48,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme, hotKeys: hotKeys)
         settingsWindow = SettingsWindowController(
             theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps,
-            queueSettings: queueSettings,
+            queueSettings: queueSettings, pictureText: pictureText,
             setHotKeySuspended: { registrar.isSuspended = $0 }
         )
         super.init()
         statusMenu.showSettingsWindow = { [settingsWindow] in settingsWindow.show() }
         settingsWindow.showWelcome = { [weak self] in self?.showWelcome() }
+        settingsWindow.onPictureTextEnabled = { [weak self] in self?.indexer?.catchUp() }
         statusMenu.onShowPanel = { [weak self] in self?.panelController?.toggle() }
     }
 
@@ -93,7 +98,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ) { [weak self] clip in
                 guard let self else { return }
                 do {
-                    try store.insert(clip)
+                    let id = try store.insert(clip)
+                    if clip.imagePNG != nil { self.indexer?.enqueue(id) }
                     try store.prune(self.retention.policy)
                     self.statusMenu.storageError = nil
                 } catch {
@@ -104,6 +110,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             // Adding or removing an ignored app takes effect for the very next copy.
             ignoredApps.onChange = { [weak monitor] ids in monitor?.filter.ignoredBundleIdentifiers = ids }
+            // Reads the words in pictures in the background so screenshots can be searched; pictures from before this
+            // existed are caught up a few seconds after launch, so starting Pastu stays quick.
+            let indexer = PictureIndexer(
+                store: store, recognizer: VisionTextRecognizer(),
+                isEnabled: { [pictureText] in pictureText.isEnabled },
+                onIndexed: { [weak self] in if self?.panelController?.isVisible == true { model.refresh() } }
+            )
+            self.indexer = indexer
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(5))
+                indexer.catchUp()
+            }
             monitor.start()
             self.monitor = monitor
             pasteCoordinator.monitor = monitor

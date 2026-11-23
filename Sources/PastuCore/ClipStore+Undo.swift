@@ -12,13 +12,14 @@ public struct ClipSnapshot: Sendable {
     public let isPinned: Bool
     let isImage: Bool
     let imagePNG: Data?
+    let ocrText: String?
 }
 
 extension ClipStore {
     /// Reads one clip completely (picture bytes included), or nil when it does not exist.
     public func snapshot(id: Int64) throws -> ClipSnapshot? {
         let stmt = try prepare("""
-            SELECT text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image
+            SELECT text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image, ocr_text
             FROM clips WHERE id = ?1
             """)
         defer { sqlite3_finalize(stmt) }
@@ -36,7 +37,8 @@ extension ClipStore {
             copyCount: Int(sqlite3_column_int64(stmt, 4)),
             isPinned: sqlite3_column_int64(stmt, 5) != 0,
             isImage: string(6) == "image",
-            imagePNG: image
+            imagePNG: image,
+            ocrText: string(8)
         )
     }
 
@@ -46,8 +48,8 @@ extension ClipStore {
     public func restore(_ clip: ClipSnapshot) throws -> Int64 {
         let insert = try prepare("""
             INSERT OR IGNORE INTO clips
-                (text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                (text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image, ocr_text)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             """)
         defer { sqlite3_finalize(insert) }
         bind(clip.text, at: 1, in: insert)
@@ -58,6 +60,7 @@ extension ClipStore {
         sqlite3_bind_int64(insert, 6, clip.isPinned ? 1 : 0)
         bind(clip.isImage ? "image" : "text", at: 7, in: insert)
         bind(blob: clip.imagePNG, at: 8, in: insert)
+        bind(clip.ocrText, at: 9, in: insert)
         guard sqlite3_step(insert) == SQLITE_DONE else { throw lastError() }
 
         let select = try prepare("SELECT id FROM clips WHERE text = ?1")

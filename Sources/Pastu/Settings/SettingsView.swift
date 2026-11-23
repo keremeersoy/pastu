@@ -9,6 +9,8 @@ struct SettingsView: View {
     let retention: RetentionSettings
     let ignoredApps: IgnoredApps
     let queueSettings: QueueSettings
+    let pictureText: PictureTextSettings
+    var onPictureTextEnabled: () -> Void = {}
     var showWelcome: () -> Void = {}
     let recorder: ShortcutRecorder
     let glassAvailable: Bool
@@ -19,6 +21,7 @@ struct SettingsView: View {
         @Bindable var theme = theme
         @Bindable var retention = retention
         @Bindable var queueSettings = queueSettings
+        @Bindable var pictureText = pictureText
         Form {
             Section("General") {
                 Toggle("Open Pastu at login", isOn: Binding(
@@ -59,6 +62,12 @@ struct SettingsView: View {
                     ForEach(RetentionSettings.sizeChoices, id: \.self) { Text(RetentionSettings.sizeTitle($0)).tag($0) }
                 }
                 Text("Clips over a limit are deleted the next time Pastu saves a copy or starts. Pinned clips are never deleted.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("Search") {
+                Toggle("Find text in pictures", isOn: $pictureText.isEnabled)
+                    .onChange(of: pictureText.isEnabled) { if pictureText.isEnabled { onPictureTextEnabled() } }
+                Text("Screenshots and pictures are read on this Mac (nothing is sent anywhere), so you can search for the words in them.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Paste Queue") {

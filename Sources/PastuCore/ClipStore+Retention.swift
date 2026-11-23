@@ -50,7 +50,8 @@ extension ClipStore {
     /// (the trigram index), plus the bytes of every image (stored once, not indexed).
     public func estimatedSizeInBytes() throws -> Int {
         let stmt = try prepare("""
-            SELECT COALESCE(SUM(LENGTH(CAST(text AS BLOB))), 0), COALESCE(SUM(LENGTH(image)), 0) FROM clips
+            SELECT COALESCE(SUM(LENGTH(CAST(text AS BLOB)) + COALESCE(LENGTH(CAST(ocr_text AS BLOB)), 0)), 0),
+                   COALESCE(SUM(LENGTH(image)), 0) FROM clips
             """)
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
@@ -62,7 +63,7 @@ extension ClipStore {
         var excess = try estimatedSizeInBytes() - cap
         guard excess > 0 else { return 0 }
         let select = try prepare("""
-            SELECT id, LENGTH(CAST(text AS BLOB)), COALESCE(LENGTH(image), 0)
+            SELECT id, LENGTH(CAST(text AS BLOB)) + COALESCE(LENGTH(CAST(ocr_text AS BLOB)), 0), COALESCE(LENGTH(image), 0)
             FROM clips WHERE pinned = 0 ORDER BY last_copied_at ASC, id ASC
             """)
         defer { sqlite3_finalize(select) }

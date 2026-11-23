@@ -69,6 +69,38 @@ extension ClipStore {
             }
             try exec("PRAGMA user_version = 3")
         }
+        if try userVersion() < 4 {
+            // v4: text recognised in pictures. The full-text index now covers a second column, so it is rebuilt
+            // together with its triggers (the clips themselves are untouched). Pictures already in the history
+            // have NULL there, which means "not looked at yet".
+            if !(try columnExists("ocr_text", in: "clips")) {
+                try exec("ALTER TABLE clips ADD COLUMN ocr_text TEXT")
+            }
+            try exec("""
+                BEGIN;
+                DROP TRIGGER IF EXISTS clips_ai;
+                DROP TRIGGER IF EXISTS clips_ad;
+                DROP TRIGGER IF EXISTS clips_au;
+                DROP TABLE IF EXISTS clips_fts;
+                CREATE VIRTUAL TABLE clips_fts USING fts5(
+                    text, ocr_text, content='clips', content_rowid='id',
+                    tokenize='trigram remove_diacritics 1'
+                );
+                CREATE TRIGGER clips_ai AFTER INSERT ON clips BEGIN
+                    INSERT INTO clips_fts (rowid, text, ocr_text) VALUES (new.id, new.text, new.ocr_text);
+                END;
+                CREATE TRIGGER clips_ad AFTER DELETE ON clips BEGIN
+                    INSERT INTO clips_fts (clips_fts, rowid, text, ocr_text) VALUES ('delete', old.id, old.text, old.ocr_text);
+                END;
+                CREATE TRIGGER clips_au AFTER UPDATE OF ocr_text ON clips BEGIN
+                    INSERT INTO clips_fts (clips_fts, rowid, text, ocr_text) VALUES ('delete', old.id, old.text, old.ocr_text);
+                    INSERT INTO clips_fts (rowid, text, ocr_text) VALUES (new.id, new.text, new.ocr_text);
+                END;
+                INSERT INTO clips_fts (clips_fts) VALUES ('rebuild');
+                COMMIT;
+                """)
+            try exec("PRAGMA user_version = 4")
+        }
     }
 
     private func ftsUsesWordTokenizer() throws -> Bool {
