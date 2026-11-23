@@ -1,6 +1,6 @@
 cask "pastu" do
-  version "0.3.0"
-  sha256 "550c3f85161651e1bf1546505c9293eceda730da25a2e678e1c39111bce218f0"
+  version "0.4.0"
+  sha256 "0fd22589668b3f688972a314f003a48aadb6800bae50537c03723d48b9f97055"
 
   url "https://github.com/keremeersoy/pastu/releases/download/v#{version}/Pastu-#{version}.zip"
   name "Pastu"
