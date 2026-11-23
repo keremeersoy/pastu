@@ -43,20 +43,22 @@ private struct GlassFilterButtons: View {
         }
     }
 
-    @ViewBuilder
+    /// One shape and one padding for every chip, selected or not. The stock `.glass` and `.glassProminent` styles
+    /// pad differently, which made the selected chip shrink; the selected chip is now only tinted.
     private func button(for filter: ClipFilter) -> some View {
-        let button = Button { selection = filter } label: { FilterLabel(filter: filter) }
-        Group {
-            // The two styles are different types, so they cannot share one ternary.
-            if filter == selection {
-                button.buttonStyle(.glassProminent)
-            } else {
-                button.buttonStyle(.glass)
-            }
+        let isSelected = filter == selection
+        return Button { selection = filter } label: {
+            FilterLabel(filter: filter)
+                .font(.callout)
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .padding(.horizontal, 10)
+                .frame(height: 26)
+                .contentShape(Capsule())
         }
-        .controlSize(.small)
+        .buttonStyle(.plain)
+        .glassEffect(isSelected ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: Capsule())
         .focusable(false)
-        .accessibilityAddTraits(filter == selection ? .isSelected : [])
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

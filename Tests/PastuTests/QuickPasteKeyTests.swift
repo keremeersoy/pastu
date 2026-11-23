@@ -436,6 +436,37 @@ extension ShellTests {
         #expect(model.filter == .links)
     }
 
+    /// The selected chip used a different button style from the others, and macOS gave it smaller padding, so the
+    /// active chip shrank. Every chip must keep one height, and a chip's width must not change when it is selected.
+    @Test(.enabled(if: ProcessInfo.processInfo.isOperatingSystemAtLeast(
+        OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
+    ), "glass buttons exist only on macOS 26"))
+    func selectingAFilterDoesNotResizeItsChip() async throws {
+        let model = ClipListModel(store: try ClipStore())
+        let panel = await hostedPanel(model, style: .glass)
+        defer { panel.orderOut(nil) }
+        let content = try #require(panel.contentView)
+
+        func chipSizes() throws -> [ClipFilter: CGSize] {
+            var sizes: [ClipFilter: CGSize] = [:]
+            for filter in ClipFilter.allCases {
+                let chip = try #require(accessibilityElement(exactly: filter.title, in: content))
+                try #require(chip.accessibilityRole?() == .button)
+                sizes[filter] = try #require(chip.accessibilityFrame?()).size
+            }
+            return sizes
+        }
+        let unselected = try chipSizes()   // "All" is selected
+        model.filter = .links
+        await pump(0.3)
+        let selected = try chipSizes()     // "Links" is selected
+
+        let heights = Set((Array(unselected.values) + Array(selected.values)).map { Int($0.height.rounded()) })
+        #expect(heights.count == 1, "chip heights: \(heights)")
+        let linksBefore = try #require(unselected[.links]), linksAfter = try #require(selected[.links])
+        #expect(abs(linksBefore.width - linksAfter.width) < 1, "Links width \(linksBefore.width) -> \(linksAfter.width)")
+    }
+
     @Test func clearButtonEmptiesTheQuery() async throws {
         let model = ClipListModel(store: try ClipStore())
         model.query = "swift"
