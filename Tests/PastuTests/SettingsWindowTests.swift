@@ -128,5 +128,19 @@ extension ShellTests {
             #expect(accessibilityElement(containing: text, in: content) != nil, "missing \(text)")
         }
     }
+
+    @Test func theWelcomeGuideCanBeOpenedAgainFromSettings() async throws {
+        enableAccessibilityTree()
+        let controller = makeController()
+        var opened = 0
+        controller.showWelcome = { opened += 1 }
+        let window = try #require(controller.show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        let button = try #require(accessibilityElement(containing: "Show Welcome Guide", in: content))
+        #expect(accessibilityPress(button))
+        #expect(opened == 1)
+    }
 }
 }

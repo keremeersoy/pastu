@@ -12,6 +12,7 @@ import Testing
         #expect(DefaultsKeys.panelAppearance == "panelAppearance")
         #expect(DefaultsKeys.panelMaterial == "panelMaterial")
         #expect(DefaultsKeys.hotKey == "hotKey")
+        #expect(DefaultsKeys.onboardingDone == "onboardingDone")
         #expect(DefaultsKeys.retentionCount == "retentionCount")
         #expect(DefaultsKeys.retentionAgeDays == "retentionAgeDays")
         #expect(DefaultsKeys.retentionSizeMB == "retentionSizeMB")

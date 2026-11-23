@@ -8,6 +8,7 @@ struct SettingsView: View {
     let hotKeys: HotKeySettings
     let retention: RetentionSettings
     let ignoredApps: IgnoredApps
+    var showWelcome: () -> Void = {}
     let recorder: ShortcutRecorder
     let glassAvailable: Bool
     /// Opens System Settings at Login Items; replaceable for tests.
@@ -23,6 +24,7 @@ struct SettingsView: View {
                 ))
                 .disabled(!launchAtLogin.isAvailable)
                 loginNote
+                Button("Show Welcome Guide…", action: showWelcome)
             }
             Section("Shortcut") {
                 LabeledContent("Show Pastu") {

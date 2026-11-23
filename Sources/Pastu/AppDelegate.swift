@@ -17,6 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let theme: ThemeSettings
     private let statusMenu: StatusMenuController
     private let settingsWindow: SettingsWindowController
+    private let onboarding: Onboarding
+    private let launchAtLogin = LaunchAtLogin(service: SystemLoginItem())
+    private var onboardingWindow: OnboardingWindowController?
     private let pasteCoordinator = PasteCoordinator()
 
     override init() {
@@ -25,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ignoredApps = IgnoredApps(store: UserDefaults.standard)
         let theme = ThemeSettings(store: UserDefaults.standard)
         self.theme = theme
+        let onboarding = Onboarding(store: UserDefaults.standard)
+        self.onboarding = onboarding
         let retention = RetentionSettings(store: UserDefaults.standard)
         self.retention = retention
         let registrar = hotKeyRegistrar
@@ -35,11 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.ignoredApps = ignoredApps
         statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme, hotKeys: hotKeys)
         settingsWindow = SettingsWindowController(
-            theme: theme, launchAtLogin: LaunchAtLogin(service: SystemLoginItem()), hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps,
+            theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps,
             setHotKeySuspended: { registrar.isSuspended = $0 }
         )
         super.init()
         statusMenu.showSettingsWindow = { [settingsWindow] in settingsWindow.show() }
+        settingsWindow.showWelcome = { [weak self] in self?.showWelcome() }
         statusMenu.onShowPanel = { [weak self] in self?.panelController?.toggle() }
     }
 
@@ -101,6 +107,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Ask for the Accessibility permission right away (once per launch) instead of failing silently
         // at the first paste.
-        pasteCoordinator.requestAccessibilityIfNeeded()
+        // A new install gets the welcome guide, whose second step asks for the permission with an explanation.
+        if onboarding.isNeeded {
+            showWelcome()
+        } else {
+            pasteCoordinator.requestAccessibilityIfNeeded()
+        }
+    }
+
+    /// Opens the welcome guide from its first step (first launch, or "Show Welcome Guide…" in Settings).
+    private func showWelcome() {
+        onboarding.restart()
+        let controller = onboardingWindow ?? OnboardingWindowController(
+            onboarding: onboarding, hotKeys: hotKeys, launchAtLogin: launchAtLogin,
+            isTrusted: { PasteSender.isTrusted },
+            requestAccessibility: { [weak self] in self?.pasteCoordinator.requestAccessibilityIfNeeded() },
+            openAccessibilitySettings: SystemSettings.openAccessibility
+        )
+        onboardingWindow = controller
+        NSApp.activate()
+        _ = controller.show()
     }
 }

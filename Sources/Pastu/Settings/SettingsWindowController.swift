@@ -10,6 +10,8 @@ final class SettingsWindowController {
     private let hotKeys: HotKeySettings
     private let retention: RetentionSettings
     private let ignoredApps: IgnoredApps
+    /// "Show Welcome Guide…"; set by the app delegate once it exists.
+    var showWelcome: () -> Void = {}
     private let setHotKeySuspended: (Bool) -> Void
     private let glassAvailable: Bool
     private var window: NSWindow?
@@ -39,7 +41,7 @@ final class SettingsWindowController {
         window.isReleasedWhenClosed = false
         window.title = "Settings"
         window.contentView = NSHostingView(rootView: SettingsView(
-            theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps,
+            theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps, showWelcome: { [weak self] in self?.showWelcome() },
             recorder: ShortcutRecorder(hotKeys: hotKeys, setSuspended: setHotKeySuspended),
             glassAvailable: glassAvailable
         ))

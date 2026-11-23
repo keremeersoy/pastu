@@ -7,6 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A three-step welcome guide on first launch (what Pastu does, letting it paste, open at login). Reopen it with "Show Welcome Guide…" in Settings.
 - ⌘Z in the panel restores clips you deleted (up to 20, kept in memory only until the panel closes).
 - A Settings window ("Settings…" in the menu bar menu) with the panel theme, "Open Pastu at login", a changeable global shortcut and history limits (clip count, age, size) and a list of ignored apps. More settings follow.
 
