@@ -54,6 +54,7 @@ yourself.
 | ⌘1 – ⌘9 | Paste one of the first nine clips |
 | ⌘P | Pin a clip (stays on top, never deleted) |
 | ⌘⌫ | Delete a clip |
+| ⌘Z | Restore the clip you deleted last (until the panel closes) |
 | ⌘I | Never record copies from this clip's app |
 | Tab / ⇧Tab | Show all, text, links or images (⇧Tab goes backwards) |
 | ⌘/ | Show all shortcuts |
