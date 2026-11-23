@@ -19,6 +19,8 @@ follows [Semantic Versioning](https://semver.org/).
 - Clear messages for empty history, no results and filters with nothing in them.
 - VoiceOver reads each clip and announces selection changes and notices.
 - "About Pastu" in the menu bar menu.
+- A Theme submenu in the menu bar menu: panel appearance (System, Light, Dark) and material (Liquid Glass,
+  Frosted, Solid). Reduce Transparency in System Settings still wins.
 
 ### Changed
 - Esc clears the search first and closes the panel on the second press.

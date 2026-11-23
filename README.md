@@ -80,6 +80,8 @@ The menu bar icon lets you pause recording, clear the history and manage ignored
 ## Good to know
 
 - The shortcut is fixed to ⌘⇧V for now. A settings window is planned.
+- Pick the panel's look under Theme in the menu bar menu: System, Light or Dark, and Liquid Glass, Frosted or
+  Solid. A settings window is planned. Reduce Transparency in System Settings always gives a solid background.
 - Text and pictures are supported. Files, colors and rich text are not yet.
 - The screenshots above show the panel's layout with sample data. On macOS 26 the real panel has a
   Liquid Glass background.
