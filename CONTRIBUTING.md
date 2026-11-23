@@ -38,6 +38,12 @@ and the scripts must unlock it without a prompt. Never distribute builds signed 
 
 `VERSION=0.1.0 ./scripts/build-app.sh` sets the version of the built app only (the release workflow uses it).
 
+### Releasing
+
+Pushing a tag `vX.Y.Z` (after bumping `Resources/Info.plist` and adding a `## [X.Y.Z]` section to `CHANGELOG.md`)
+runs the release workflow: it tests, builds, publishes the zip, and then commits the new version and SHA-256 to
+`Casks/pastu.rb` on `main`. Nothing to edit by hand; `scripts/update-cask.sh` is the same step for a manual fix.
+
 ## Tests
 
 ```bash

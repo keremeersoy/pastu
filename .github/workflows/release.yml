@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds Pastu.app, zips it and publishes a GitHub prerelease with the zip and its
-# SHA-256. Uses only the built-in GITHUB_TOKEN; no other secrets. The build is ad-hoc signed, not notarized.
+# Pushing a tag like v0.1.0 builds Pastu.app, zips it, publishes a GitHub prerelease with the zip and its
+# SHA-256, then updates Casks/pastu.rb on main. Uses only the built-in GITHUB_TOKEN; no other secrets.
+# The build is ad-hoc signed, not notarized.
 on:
   push:
     tags: ["v*"]
@@ -102,3 +103,24 @@ jobs:
             --title "Pastu ${{ steps.version.outputs.version }}" \
             --notes-file notes.md \
             --prerelease --verify-tag
+      - name: Update the Homebrew cask
+        # The cask lives in this repository (Casks/pastu.rb), so one tag updates the release and `brew install`.
+        # Pre-release tags such as v1.0.0-beta.1 are skipped: the cask follows stable versions only.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [[ "$VERSION" == *-* ]]; then echo "Pre-release tag, leaving the cask alone"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          ./scripts/update-cask.sh "$VERSION" "${{ steps.package.outputs.sha }}"
+          if git diff --quiet; then echo "Cask already at $VERSION"; exit 0; fi
+          git commit -am "Update the Homebrew cask to $VERSION"
+          for attempt in 1 2 3; do
+            if git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main; then exit 0; fi
+            git pull --rebase origin main
+          done
+          echo "::error::Could not push the cask update; the release itself is published. Run scripts/update-cask.sh by hand."
+          exit 1

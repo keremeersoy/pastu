@@ -16,7 +16,7 @@
 Press **⌘⇧V**, type a few letters, hit **Return**. Pastu remembers what you copy (text and pictures) and pastes it
 back into the app you were using.
 
-> **Early version (0.1).** It works for daily use, but expect rough edges. Builds are not notarized by Apple yet,
+> **Early version (0.2).** It works for daily use, but expect rough edges. Builds are not notarized by Apple yet,
 > so macOS asks you to confirm the first launch (one extra click, explained below).
 
 ## Install
@@ -24,10 +24,11 @@ back into the app you were using.
 **Homebrew** (one line):
 
 ```bash
-brew tap keremeersoy/pastu && brew trust keremeersoy/pastu && brew install --cask pastu
+brew tap keremeersoy/pastu https://github.com/keremeersoy/pastu && brew trust keremeersoy/pastu && brew install --cask pastu
 ```
 
 Homebrew asks you to trust taps that are not part of Homebrew itself; `brew trust` does that for this one tap.
+The cask lives in this repository (`Casks/pastu.rb`) and is updated automatically with every release.
 
 **Or download** [Pastu-0.2.0.zip](https://github.com/keremeersoy/pastu/releases/download/v0.2.0/Pastu-0.2.0.zip),
 unzip it and move `Pastu.app` to Applications.

@@ -30,6 +30,10 @@ jobs:
             echo "No Xcode 26 found on this runner:"; ls -d /Applications/Xcode*; exit 1
           fi
           sudo xcode-select -s "$XCODE"
+      - name: Check the Homebrew cask
+        run: |
+          ruby -c Casks/pastu.rb
+          ./scripts/test-update-cask.sh
       - name: Show toolchain
         run: |
           xcodebuild -version
