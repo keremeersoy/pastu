@@ -29,7 +29,7 @@ brew tap keremeersoy/pastu && brew trust keremeersoy/pastu && brew install --cas
 
 Homebrew asks you to trust taps that are not part of Homebrew itself; `brew trust` does that for this one tap.
 
-**Or download** [Pastu-0.1.1.zip](https://github.com/keremeersoy/pastu/releases/download/v0.1.1/Pastu-0.1.1.zip),
+**Or download** [Pastu-0.2.0.zip](https://github.com/keremeersoy/pastu/releases/download/v0.2.0/Pastu-0.2.0.zip),
 unzip it and move `Pastu.app` to Applications.
 
 Requires macOS 15 or later on Apple Silicon.

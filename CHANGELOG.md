@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-23
+
 ### Added
 - A redesigned panel with a Liquid Glass look on macOS 26 (a clean fallback look on macOS 15), rounded corners
   and a calmer preview with source, time and size.
@@ -81,6 +83,7 @@ Tagged but never released: the release build stopped on the flaky test fixed in 
 - Text containing NUL characters is stored whole instead of being truncated (which could merge different clips).
 - Deleted and pruned clips are overwritten in the database file (`secure_delete`).
 
-[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/keremeersoy/pastu/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/keremeersoy/pastu/releases/tag/v0.1.1
 [0.1.0]: https://github.com/keremeersoy/pastu/tree/v0.1.0
