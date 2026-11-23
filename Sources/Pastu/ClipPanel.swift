@@ -11,6 +11,8 @@ final class ClipPanel: NSPanel {
     /// text before SwiftUI sees these keys.
     var onMoveToStart: (() -> Void)?
     var onMoveToEnd: (() -> Void)?
+    /// ⌘Z: bring back the clip deleted last. Returns whether there was one.
+    var onUndoDelete: (() -> Bool)?
 
     init(size: NSSize) {
         super.init(
@@ -65,6 +67,12 @@ final class ClipPanel: NSPanel {
            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
             onDeleteSelected?()
             return true
+        }
+        let zKeyCode: UInt16 = 6
+        if event.keyCode == zKeyCode, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+            // Typing in the search field has its own undo, which comes first.
+            let textCanUndo = firstResponder?.undoManager?.canUndo == true
+            if !textCanUndo, onUndoDelete?() == true { return true }
         }
         let upArrowKeyCode: UInt16 = 126, downArrowKeyCode: UInt16 = 125
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.numericPad, .function]) == .command {

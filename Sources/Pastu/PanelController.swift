@@ -69,6 +69,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             model.deleteSelected()
             PanelCaches.forget(id, model: model)
         }
+        panel.onUndoDelete = { model.undoDelete() }
         panel.onMoveToStart = { model.moveToStart() }
         panel.onMoveToEnd = { model.moveToEnd() }
         panel.onContextClickEnded = { [weak self] chose in self?.contextClickEnded(choseMenuItem: chose) }

@@ -220,6 +220,62 @@ extension ShellTests {
         #expect(handled)
         #expect(deletes == 1)
     }
+    // MARK: Undo delete
+
+    @Test func commandZRestoresTheClipDeletedLast() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let store = try ClipStore()
+        for (i, text) in ["oldest", "newest"].enumerated() {
+            try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        let model = ClipListModel(store: store)
+        let controller = PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        await pump()
+        defer { controller.hide() }
+        controller.panel.onDeleteSelected?()
+        #expect(model.clips.map(\.text) == ["oldest"])
+        // The search field has nothing typed, so ⌘Z is not its text undo.
+        let handled = controller.panel.performKeyEquivalent(
+            with: keyEvent("z", keyCode: 6, modifiers: .command, window: controller.panel)
+        )
+        #expect(handled)
+        #expect(model.clips.map(\.text) == ["newest", "oldest"])
+    }
+
+    @Test func commandZWithNothingToRestoreIsLeftAlone() {
+        let panel = ClipPanel(size: NSSize(width: 100, height: 100))
+        panel.onUndoDelete = { false }
+        #expect(!panel.performKeyEquivalent(with: keyEvent("z", keyCode: 6, modifiers: .command, window: panel)))
+    }
+
+    @Test(arguments: [
+        NSEvent.ModifierFlags([]), .shift, .option, .control, [.command, .shift], [.command, .option],
+    ])
+    func onlyExactlyCommandZRestores(modifiers: NSEvent.ModifierFlags) {
+        let panel = ClipPanel(size: NSSize(width: 100, height: 100))
+        var calls = 0
+        panel.onUndoDelete = { calls += 1; return true }
+        _ = panel.performKeyEquivalent(with: keyEvent("z", keyCode: 6, modifiers: modifiers, window: panel))
+        #expect(calls == 0)
+    }
+
+    /// What would be restored is clip text: hiding the panel forgets it.
+    @Test func hidingThePanelForgetsWhatCouldBeRestored() async throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let store = try ClipStore()
+        try store.insert(CapturedClip(text: "secret", sourceBundleIdentifier: nil, date: Date()))
+        let model = ClipListModel(store: store)
+        let controller = PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        controller.panel.onDeleteSelected?()
+        #expect(model.canUndoDelete)
+        controller.hide()
+        #expect(!model.canUndoDelete)
+    }
+
     // MARK: Focus on open
 
     /// Rarely, SwiftUI's initial focus request did nothing: the panel was key but its first responder stayed the

@@ -80,9 +80,11 @@ public final class ClipListModel {
     }
 
     /// Forgets every cached row snippet. A snippet is clip text, so it must not outlive Clear History.
+    /// Clips deleted in the panel can no longer be restored either: they are clip text as well.
     public func purgeSnippets() {
         snippetCache = [:]
         snippetCacheQuery = ""
+        deletedClips = []
     }
 
     /// Forgets one clip's snippet, because the clip was removed.
@@ -176,9 +178,32 @@ public final class ClipListModel {
     /// The next clip takes its row, or the selection moves up when the last row was deleted.
     public func deleteSelected() {
         guard let clip = selectedClip else { return }
+        // Kept in memory only, for ⌘Z while the panel stays open; `purgeSnippets` drops it.
+        if let snapshot = try? store.snapshot(id: clip.id) {
+            deletedClips.append(snapshot)
+            if deletedClips.count > Self.undoLimit { deletedClips.removeFirst() }
+        }
         try? store.delete(id: clip.id)
         forgetSnippet(of: clip.id)
         reloadLoaded()   // clamps the selection into range
+    }
+
+    /// How many deletes ⌘Z can undo in one panel session.
+    public static let undoLimit = 20
+
+    /// Deleted clips, oldest first; restored last-in first-out. Not observed: the list reloads when one comes back.
+    @ObservationIgnored private var deletedClips: [ClipSnapshot] = []
+    public var canUndoDelete: Bool { !deletedClips.isEmpty }
+
+    /// ⌘Z: brings back the clip deleted last and selects it. Returns false when there is nothing to restore.
+    @discardableResult
+    public func undoDelete() -> Bool {
+        guard let snapshot = deletedClips.last, let id = try? store.restore(snapshot) else { return false }
+        deletedClips.removeLast()
+        reloadLoaded()
+        if let index = clips.firstIndex(where: { $0.id == id }) { selectedIndex = index }
+        notice = "Restored"
+        return true
     }
 
     /// Moves the selection with the arrow keys, clamped to the list (no wrap-around). Clears any notice.

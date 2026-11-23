@@ -8,6 +8,7 @@ struct ShortcutsOverlay: View {
         ("⌘1–9", "Paste row"),
         ("⌘P", "Pin"),
         ("⌘⌫", "Delete"),
+        ("⌘Z", "Restore deleted"),
         ("⌘I", "Ignore app"),
         ("⇥ / ⇧⇥", "Filter"),
         ("↑ ↓", "Select"),

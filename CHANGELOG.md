@@ -7,6 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- ⌘Z in the panel restores clips you deleted (up to 20, kept in memory only until the panel closes).
 - A Settings window ("Settings…" in the menu bar menu) with the panel theme, "Open Pastu at login", a changeable global shortcut and history limits (clip count, age, size) and a list of ignored apps. More settings follow.
 
 ## [0.2.0] - 2026-11-23
