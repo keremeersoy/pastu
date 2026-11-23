@@ -52,6 +52,7 @@ yourself.
 | ⌘↑ ⌘↓ / Home End | Jump to the first or last clip |
 | Page Up / Page Down | Move a page at a time |
 | ⌘1 – ⌘9 | Paste one of the first nine clips |
+| ⌥↩ / ⌘↩ | Add the selected clip to the paste queue / paste the whole queue in order |
 | ⌘P | Pin a clip (stays on top, never deleted) |
 | ⌘⌫ | Delete a clip |
 | ⌘Z | Restore the clip you deleted last (until the panel closes) |

@@ -7,6 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Paste queue: ⌥↩ collects the selected clip (up to 20) and moves to the next row, ⌘↩ pastes the queue one clip after another, with a new line, space, tab or nothing between text clips (Settings). Queued rows show their number, the footer has a Clear button, and the queue lives in memory only.
 - Drag a clip out of the panel into another app: text drops as text, a picture as a PNG file.
 - "Open in Preview" in a picture's right-click menu. The copy it opens is removed when Pastu starts and quits.
 

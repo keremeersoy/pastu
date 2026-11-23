@@ -6,6 +6,8 @@ struct ShortcutsOverlay: View {
     private static let rows: [(keys: String, action: String)] = [
         ("↩", "Paste"),
         ("⌘1–9", "Paste row"),
+        ("⌥↩", "Add to queue"),
+        ("⌘↩", "Paste queue"),
         ("⌘P", "Pin"),
         ("⌘⌫", "Delete"),
         ("⌘Z", "Restore deleted"),

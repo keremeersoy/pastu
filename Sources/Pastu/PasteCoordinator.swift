@@ -65,4 +65,41 @@ final class PasteCoordinator {
             self.sendPaste()
         }
     }
+
+    /// Pastes queued clips one after another: each goes on the pasteboard and ⌘V is sent, then the next. Text clips
+    /// carry the separator that follows them. Without the Accessibility permission nothing can be pasted for the
+    /// user, so the text of the queue is copied as one piece instead and the permission is requested.
+    func pasteQueue(
+        _ steps: [(clip: StoredClip, suffix: String)],
+        startDelay: Duration = .milliseconds(80), stepDelay: Duration = .milliseconds(180)
+    ) async {
+        guard !steps.isEmpty else { return }
+        guard isTrusted() else {
+            let combined = steps.filter { $0.clip.kind != .image }.map { $0.clip.text + $0.suffix }.joined()
+            monitor?.copyToPasteboard(combined)
+            requestAccessibilityIfNeeded()
+            return
+        }
+        if isPastuActive() { hidePastu() }
+        // Give the panel a moment to disappear so the key events reach the previous app.
+        try? await Task.sleep(for: startDelay)
+        for step in steps {
+            guard put(step.clip, suffix: step.suffix) else { continue }
+            sendPaste()
+            // The target app reads the pasteboard when it handles ⌘V; the next clip must not replace it before that.
+            try? await Task.sleep(for: stepDelay)
+        }
+    }
+
+    /// Writes one queued clip, with its separator when it is text, and moves it up the history.
+    private func put(_ clip: StoredClip, suffix: String) -> Bool {
+        guard let store, let monitor else { return false }
+        if clip.kind == .image {
+            guard ClipPasteboardWriter.copy(clip, from: store, using: monitor) else { return false }
+        } else {
+            monitor.copyToPasteboard(clip.text + suffix)
+        }
+        try? store.markUsed(id: clip.id)
+        return true
+    }
 }

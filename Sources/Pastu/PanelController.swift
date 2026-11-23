@@ -16,6 +16,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let onResume: () -> Void
     private let openAccessibilitySettings: () -> Void
     private let onCopy: (StoredClip) -> Void
+    private let onPasteQueue: ([(clip: StoredClip, suffix: String)]) -> Void
+    private let queueSettings: QueueSettings
     private let theme: ThemeSettings
     let panel = ClipPanel(size: PanelController.size)
     /// Watches ⌘ only while the panel is visible (started in `show`, stopped in `hide`).
@@ -42,6 +44,8 @@ final class PanelController: NSObject, NSWindowDelegate {
         openAccessibilitySettings: @escaping () -> Void = SystemSettings.openAccessibility,
         onCopy: @escaping (StoredClip) -> Void = { _ in },
         theme: ThemeSettings = ThemeSettings(),
+        queueSettings: QueueSettings = QueueSettings(),
+        onPasteQueue: @escaping ([(clip: StoredClip, suffix: String)]) -> Void = { _ in },
         onSelect: @escaping (StoredClip) -> Void
     ) {
         self.model = model
@@ -53,6 +57,8 @@ final class PanelController: NSObject, NSWindowDelegate {
         self.openAccessibilitySettings = openAccessibilitySettings
         self.onCopy = onCopy
         self.theme = theme
+        self.queueSettings = queueSettings
+        self.onPasteQueue = onPasteQueue
         self.onSelect = onSelect
         super.init()
         panel.delegate = self
@@ -99,6 +105,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             onSubmit: { [weak self] in self?.submit() },
             onIgnoreApp: { [weak self] in self?.ignoreSelectedApp() },
             onCopyOnly: { [weak self] in self?.copySelected() },
+            onPasteQueue: { [weak self] in self?.submitQueue() },
             onResume: onResume,
             onOpenAccessibilitySettings: { [weak self] in
                 // Hide first: the floating panel would otherwise cover System Settings.
@@ -150,6 +157,15 @@ final class PanelController: NSObject, NSWindowDelegate {
         let clip = model.selectedClip
         hide()
         if let clip { onSelect(clip) }
+    }
+
+    /// ⌘↩: closes the panel, then pastes the queued clips in order. The queue is emptied: it was used.
+    private func submitQueue() {
+        let steps = model.queue.plan(separator: queueSettings.separator)
+        guard !steps.isEmpty else { return }
+        model.queue.clear()
+        hide()
+        onPasteQueue(steps)
     }
 
     /// The row menu's "Copy": the same as `submit` but the clip only goes on the clipboard.

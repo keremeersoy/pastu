@@ -35,6 +35,7 @@ enum DefaultsKeys {
     static let panelMaterial = "panelMaterial"
     static let hotKey = "hotKey"
     static let onboardingDone = "onboardingDone"
+    static let queueSeparator = "queueSeparator"
     static let retentionCount = "retentionCount"
     static let retentionAgeDays = "retentionAgeDays"
     static let retentionSizeMB = "retentionSizeMB"

@@ -148,6 +148,7 @@ enum PanelCaches {
     /// Clear History: forget everything, including the row snippets the list's model keeps.
     static func purgeAll(model: ClipListModel?) {
         model?.purgeSnippets()
+        model?.queue.clear()
         ImageCache.shared.removeAll()
         PreviewContent.purge()
     }

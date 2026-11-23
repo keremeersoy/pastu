@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusMenu: StatusMenuController
     private let settingsWindow: SettingsWindowController
     private let onboarding: Onboarding
+    private let queueSettings: QueueSettings
     private let launchAtLogin = LaunchAtLogin(service: SystemLoginItem())
     private var onboardingWindow: OnboardingWindowController?
     private let pasteCoordinator = PasteCoordinator()
@@ -28,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ignoredApps = IgnoredApps(store: UserDefaults.standard)
         let theme = ThemeSettings(store: UserDefaults.standard)
         self.theme = theme
+        let queueSettings = QueueSettings(store: UserDefaults.standard)
+        self.queueSettings = queueSettings
         let onboarding = Onboarding(store: UserDefaults.standard)
         self.onboarding = onboarding
         let retention = RetentionSettings(store: UserDefaults.standard)
@@ -41,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu = StatusMenuController(recording: recording, ignoredApps: ignoredApps, systemPasteboard: systemPasteboard, theme: theme, hotKeys: hotKeys)
         settingsWindow = SettingsWindowController(
             theme: theme, launchAtLogin: launchAtLogin, hotKeys: hotKeys, retention: retention, ignoredApps: ignoredApps,
+            queueSettings: queueSettings,
             setHotKeySuspended: { registrar.isSuspended = $0 }
         )
         super.init()
@@ -72,7 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 isPaused: { [recording] in recording.isPaused },
                 onResume: { [weak self] in self?.statusMenu.resumeRecording() },
                 onCopy: { [weak self] clip in self?.pasteCoordinator.copy(clip) },
-                theme: theme
+                theme: theme,
+                queueSettings: queueSettings,
+                onPasteQueue: { [weak self] steps in
+                    Task { @MainActor in await self?.pasteCoordinator.pasteQueue(steps) }
+                }
             ) { [weak self] clip in
                 self?.pasteCoordinator.paste(clip)
             }

@@ -20,7 +20,7 @@ extension ShellTests {
     ) -> SettingsWindowController {
         SettingsWindowController(
             theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem(status: loginStatus)),
-            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: IgnoredApps(),
+            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: IgnoredApps(), queueSettings: QueueSettings(),
             glassAvailable: glassAvailable
         )
     }
@@ -141,6 +141,17 @@ extension ShellTests {
         let button = try #require(accessibilityElement(containing: "Show Welcome Guide", in: content))
         #expect(accessibilityPress(button))
         #expect(opened == 1)
+    }
+
+    @Test func theWindowOffersTheQueueSeparator() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController().show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        for text in ["Between clips", "New line"] {
+            #expect(accessibilityElement(containing: text, in: content) != nil, "missing \(text)")
+        }
     }
 }
 }

@@ -27,6 +27,8 @@ struct PanelView: View {
     var onIgnoreApp: () -> Void = {}
     /// The row menu's "Copy": the selected clip goes on the clipboard without ⌘V.
     var onCopyOnly: () -> Void = {}
+    /// ⌘↩ and the footer's "Paste queue": the controller closes the panel and pastes the queued clips in order.
+    var onPasteQueue: () -> Void = {}
     /// The paused banner's "Resume" button.
     var onResume: () -> Void = {}
     /// The Accessibility banner's "Enable…" button.
@@ -55,7 +57,17 @@ struct PanelView: View {
                 .onKeyPress(.end) { model.moveToEnd(); return .handled }
                 .onKeyPress(.pageUp) { model.movePage(-1, rowsPerPage: PanelMetrics.rowsPerPage); return .handled }
                 .onKeyPress(.pageDown) { model.movePage(1, rowsPerPage: PanelMetrics.rowsPerPage); return .handled }
-                .onKeyPress(.return) { onSubmit(); return .handled }
+                .onKeyPress(keys: [.return]) { press in
+                    // ⌥↩ collects the selected clip into the paste queue, ⌘↩ pastes the queue, ↩ pastes one clip.
+                    if press.modifiers.contains(.option) {
+                        model.addSelectedToQueue()
+                    } else if press.modifiers.contains(.command) {
+                        pasteQueue()
+                    } else {
+                        onSubmit()
+                    }
+                    return .handled
+                }
                 // AppKit reports Shift-Tab as the back-tab character (U+0019), not as Tab plus Shift.
                 .onKeyPress(keys: [.tab, KeyEquivalent("\u{19}")]) { press in
                     model.cycleFilter(reverse: press.modifiers.contains(.shift) || press.key.character == "\u{19}")
@@ -111,7 +123,10 @@ struct PanelView: View {
                 }
             }
 
-            HintFooter(canAutoPaste: canAutoPaste, notice: model.notice, showsShortcuts: Bindable(model).showsShortcuts)
+            HintFooter(
+                canAutoPaste: canAutoPaste, notice: model.notice, showsShortcuts: Bindable(model).showsShortcuts,
+                queueCount: model.queue.count, onPasteQueue: pasteQueue, onClearQueue: model.clearQueue
+            )
         }
         .overlay {
             // Centered over the whole panel, header and footer included; it cannot take focus (no focusable views inside).
@@ -129,6 +144,14 @@ struct PanelView: View {
         .onAppear { searchFocused = true }
     }
 
+    private func pasteQueue() {
+        guard !model.queue.isEmpty else {
+            model.notice = "The queue is empty. Add clips with ⌥↩"
+            return
+        }
+        onPasteQueue()
+    }
+
     /// Selects the row showing `clip`, then runs the action on the selection, so mouse actions go through the same
     /// paths as their keyboard shortcuts. Looked up by id at the time of the action: the list can reload while a
     /// menu is open (a new copy arrives), which would make a captured row index point at another clip.
@@ -144,6 +167,15 @@ struct PanelView: View {
         Button("Copy") { act(on: clip, onCopyOnly) }
         if clip.kind == .image {
             Button("Open in Preview") { act(on: clip) { PreviewOpener.shared.open(clip, imageData: imageData) } }
+        }
+        Divider()
+        if model.queue.position(of: clip.id) == nil {
+            Button("Add to Queue") { act(on: clip, model.addSelectedToQueue) }
+        } else {
+            Button("Remove from Queue") { model.queue.remove(id: clip.id) }
+        }
+        if !model.queue.isEmpty {
+            Button("Paste Queue (\(model.queue.count))", action: pasteQueue)
         }
         Divider()
         Button(clip.isPinned ? "Unpin" : "Pin") { act(on: clip, model.togglePinSelected) }
@@ -169,7 +201,8 @@ struct PanelView: View {
                             clip: clip, isSelected: isSelected,
                             shortcutDigit: index < 9 ? index + 1 : nil,
                             showsShortcut: isSelected || commandKeys.isCommandHeld,
-                            query: model.query, snippet: model.rowSnippet(for: clip), imageData: imageData
+                            query: model.query, snippet: model.rowSnippet(for: clip), imageData: imageData,
+                            queuePosition: model.queue.position(of: clip.id)
                         )
                             .id(clip.id)
                             // Select on the first click at once. An exclusive `onTapGesture(count: 2)` before

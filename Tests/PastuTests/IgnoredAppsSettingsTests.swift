@@ -20,7 +20,7 @@ extension ShellTests {
     private func controller(ignored: IgnoredApps) -> SettingsWindowController {
         SettingsWindowController(
             theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem()),
-            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: ignored,
+            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: ignored, queueSettings: QueueSettings(),
             glassAvailable: true
         )
     }

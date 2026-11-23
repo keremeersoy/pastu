@@ -55,4 +55,91 @@ import Testing
         for _ in 0..<50 where !events.contains("paste") { try? await Task.sleep(for: .milliseconds(20)) }
         #expect(events == (isActive ? ["hide", "paste"] : ["paste"]))
     }
+
+    // MARK: Paste queue
+
+    private struct Rig {
+        let coordinator: PasteCoordinator
+        let raw: NSPasteboard
+        let store: ClipStore
+        let events: () -> [String]
+    }
+
+    /// Records, at every ⌘V, what the private pasteboard holds, which is what the target app would paste.
+    private func makeRig(trusted: Bool = true, active: Bool = false) throws -> Rig {
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        let store = try ClipStore()
+        var events: [String] = []
+        let coordinator = PasteCoordinator(
+            sendPaste: {
+                if let png = raw.data(forType: .png) { events.append("image:\(png.count)") }
+                else { events.append(raw.string(forType: .string) ?? "<empty>") }
+            },
+            isTrusted: { trusted },
+            isPastuActive: { active },
+            hidePastu: { events.append("hide") }
+        )
+        coordinator.store = store
+        coordinator.monitor = ClipboardMonitor(source: SystemPasteboard(pasteboard: raw), filter: PrivacyFilter()) { _ in }
+        return Rig(coordinator: coordinator, raw: raw, store: store, events: { events })
+    }
+
+    private func steps(_ rig: Rig, _ texts: [String], separator: QueueSeparator) throws -> [(clip: StoredClip, suffix: String)] {
+        let queue = PasteQueue()
+        for (i, text) in texts.enumerated() {
+            try rig.store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i + 1))))
+        }
+        try rig.store.recent().sorted { $0.lastCopiedAt < $1.lastCopiedAt }.forEach { _ = queue.add($0) }
+        return queue.plan(separator: separator)
+    }
+
+    @Test func theQueueIsPastedOneClipAtATimeInOrder() async throws {
+        let rig = try makeRig()
+        defer { rig.raw.releaseGlobally() }
+        await rig.coordinator.pasteQueue(try steps(rig, ["a", "b", "c"], separator: .newline), startDelay: .zero, stepDelay: .zero)
+        #expect(rig.events() == ["a\n", "b\n", "c"])
+    }
+
+    @Test func aPictureInTheQueueIsPastedAsAPicture() async throws {
+        let rig = try makeRig()
+        defer { rig.raw.releaseGlobally() }
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        try rig.store.insert(.image(png: png, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 1)))
+        try rig.store.insert(CapturedClip(text: "after", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 2)))
+        let queue = PasteQueue()
+        try rig.store.recent().sorted { $0.lastCopiedAt < $1.lastCopiedAt }.forEach { _ = queue.add($0) }
+        await rig.coordinator.pasteQueue(queue.plan(separator: .space), startDelay: .zero, stepDelay: .zero)
+        #expect(rig.events() == ["image:\(png.count)", "after"])
+    }
+
+    @Test func withoutPermissionTheQueueIsCopiedAsOneTextAndNothingIsPasted() async throws {
+        let rig = try makeRig(trusted: false)
+        defer { rig.raw.releaseGlobally() }
+        await rig.coordinator.pasteQueue(try steps(rig, ["a", "b"], separator: .newline), startDelay: .zero, stepDelay: .zero)
+        #expect(rig.events().isEmpty)
+        #expect(rig.raw.string(forType: .string) == "a\nb")
+    }
+
+    @Test func pastuStepsAsideFirstWhenItIsActive() async throws {
+        let rig = try makeRig(active: true)
+        defer { rig.raw.releaseGlobally() }
+        await rig.coordinator.pasteQueue(try steps(rig, ["a"], separator: .none), startDelay: .zero, stepDelay: .zero)
+        #expect(rig.events() == ["hide", "a"])
+    }
+
+    @Test func anEmptyQueuePastesNothing() async throws {
+        let rig = try makeRig()
+        defer { rig.raw.releaseGlobally() }
+        await rig.coordinator.pasteQueue([], startDelay: .zero, stepDelay: .zero)
+        #expect(rig.events().isEmpty)
+    }
+
+    /// The pasted clips move to the top of the history in the order they were pasted, like single pastes do.
+    @Test func pastingTheQueueMarksEachClipUsed() async throws {
+        let rig = try makeRig()
+        defer { rig.raw.releaseGlobally() }
+        let plan = try steps(rig, ["a", "b"], separator: .none)
+        await rig.coordinator.pasteQueue(plan, startDelay: .zero, stepDelay: .zero)
+        #expect(try rig.store.recent().map(\.text) == ["b", "a"])
+    }
 }

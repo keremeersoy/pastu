@@ -220,6 +220,94 @@ extension ShellTests {
         #expect(handled)
         #expect(deletes == 1)
     }
+    // MARK: Paste queue
+
+    private func queuePanel(_ model: ClipListModel, onSubmit: @escaping () -> Void = {}, onPasteQueue: @escaping () -> Void = {}) async throws -> ClipPanel {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory)
+        let panel = ClipPanel(size: NSSize(width: 780, height: 460))
+        panel.contentView = NSHostingView(rootView: PanelView(
+            model: model, canAutoPaste: true, onSubmit: onSubmit, onPasteQueue: onPasteQueue
+        ))
+        panel.makeKeyAndOrderFront(nil)
+        await pump()
+        try #require(await searchFieldHasFocus(panel))
+        return panel
+    }
+
+    private func queueModel() throws -> ClipListModel {
+        let store = try ClipStore()
+        for (i, text) in ["oldest", "middle", "newest"].enumerated() {
+            try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i))))
+        }
+        return ClipListModel(store: store)
+    }
+
+    @Test func optionReturnAddsTheSelectedClipToTheQueueAndMovesOn() async throws {
+        let model = try queueModel()
+        var submitted = 0
+        let panel = try await queuePanel(model, onSubmit: { submitted += 1 })
+        defer { panel.orderOut(nil) }
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: .option, window: panel))
+        await pump(0.2)
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: .option, window: panel))
+        await pump(0.2)
+        #expect(model.queue.clips.map(\.text) == ["newest", "middle"])
+        #expect(model.selectedClip?.text == "oldest")
+        #expect(submitted == 0, "adding to the queue must not paste")
+    }
+
+    @Test func commandReturnPastesTheQueue() async throws {
+        let model = try queueModel()
+        var pastedQueue = 0
+        var submitted = 0
+        let panel = try await queuePanel(model, onSubmit: { submitted += 1 }, onPasteQueue: { pastedQueue += 1 })
+        defer { panel.orderOut(nil) }
+        model.addSelectedToQueue()
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: .command, window: panel))
+        await pump(0.2)
+        #expect(pastedQueue == 1)
+        #expect(submitted == 0)
+    }
+
+    @Test func commandReturnWithAnEmptyQueueSaysSoAndPastesNothing() async throws {
+        let model = try queueModel()
+        var pastedQueue = 0
+        let panel = try await queuePanel(model, onPasteQueue: { pastedQueue += 1 })
+        defer { panel.orderOut(nil) }
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: .command, window: panel))
+        await pump(0.2)
+        #expect(pastedQueue == 0)
+        #expect(model.notice == "The queue is empty. Add clips with ⌥↩")
+    }
+
+    @Test func plainReturnStillPastesOneClip() async throws {
+        let model = try queueModel()
+        var submitted = 0
+        let panel = try await queuePanel(model, onSubmit: { submitted += 1 })
+        defer { panel.orderOut(nil) }
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: [], window: panel))
+        await pump(0.2)
+        #expect(submitted == 1)
+        #expect(model.queue.isEmpty)
+    }
+
+    @Test func theFooterShowsTheQueueAndAClearButton() async throws {
+        enableAccessibilityTree()
+        let model = try queueModel()
+        let panel = try await queuePanel(model)
+        defer { panel.orderOut(nil) }
+        let content = try #require(panel.contentView)
+        #expect(accessibilityElement(containing: "Paste queue", in: content) == nil)
+        model.addSelectedToQueue()
+        model.addSelectedToQueue()
+        await pump(0.3)
+        #expect(accessibilityElement(containing: "Paste queue (2)", in: content) != nil)
+        let clear = try #require(accessibilityElement(containing: "Clear queue", in: content))
+        #expect(accessibilityPress(clear))
+        #expect(model.queue.isEmpty)
+    }
+
     // MARK: Undo delete
 
     @Test func commandZRestoresTheClipDeletedLast() async throws {
@@ -741,7 +829,7 @@ extension ShellTests {
 
         let menu = try contextMenu(onRow: 1, in: controller.panel)
         // The app is not installed, so the menu names it by its bundle identifier, as the ⌘I notice does.
-        #expect(titles(menu) == ["Paste", "Copy", "Pin", "Delete", "Ignore “com.example.editor”"])
+        #expect(titles(menu) == ["Paste", "Copy", "Add to Queue", "Pin", "Delete", "Ignore “com.example.editor”"])
         #expect(menu.items.allSatisfy { $0.isSeparatorItem || $0.isEnabled })
         #expect(controller.isVisible)
         #expect(controller.panel.firstResponder is NSTextView)

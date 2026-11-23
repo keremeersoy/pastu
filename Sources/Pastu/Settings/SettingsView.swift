@@ -8,6 +8,7 @@ struct SettingsView: View {
     let hotKeys: HotKeySettings
     let retention: RetentionSettings
     let ignoredApps: IgnoredApps
+    let queueSettings: QueueSettings
     var showWelcome: () -> Void = {}
     let recorder: ShortcutRecorder
     let glassAvailable: Bool
@@ -17,6 +18,7 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var theme = theme
         @Bindable var retention = retention
+        @Bindable var queueSettings = queueSettings
         Form {
             Section("General") {
                 Toggle("Open Pastu at login", isOn: Binding(
@@ -57,6 +59,13 @@ struct SettingsView: View {
                     ForEach(RetentionSettings.sizeChoices, id: \.self) { Text(RetentionSettings.sizeTitle($0)).tag($0) }
                 }
                 Text("Clips over a limit are deleted the next time Pastu saves a copy or starts. Pinned clips are never deleted.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section("Paste Queue") {
+                Picker("Between clips", selection: $queueSettings.separator) {
+                    ForEach(QueueSeparator.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                Text("⌥↩ adds the selected clip to the queue, ⌘↩ pastes the queue one clip after another.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Ignored Apps") {

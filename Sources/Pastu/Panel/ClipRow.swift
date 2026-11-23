@@ -15,6 +15,8 @@ struct ClipRow: View {
     /// because finding it scans the whole clip and row bodies are rebuilt on every hover and key press.
     let snippet: SearchHighlighter.Snippet?
     let imageData: (Int64) -> Data?
+    /// 1-based place in the paste queue, when the clip is queued.
+    let queuePosition: Int?
     @State private var isHovered: Bool
     /// A thumbnail decoded off the main thread; tagged with its clip so a reused row never shows another clip's.
     @State private var loadedPicture: (clipID: Int64, info: ImageCache.Info)?
@@ -22,7 +24,8 @@ struct ClipRow: View {
     /// - Parameter isHovered: the initial hover state; lets snapshot tests render a hovered row without a mouse.
     init(
         clip: StoredClip, isSelected: Bool, shortcutDigit: Int?, showsShortcut: Bool, query: String,
-        snippet: SearchHighlighter.Snippet?, imageData: @escaping (Int64) -> Data?, isHovered: Bool = false
+        snippet: SearchHighlighter.Snippet?, imageData: @escaping (Int64) -> Data?, queuePosition: Int? = nil,
+        isHovered: Bool = false
     ) {
         self.clip = clip
         self.isSelected = isSelected
@@ -31,6 +34,7 @@ struct ClipRow: View {
         self.query = query
         self.snippet = snippet
         self.imageData = imageData
+        self.queuePosition = queuePosition
         _isHovered = State(initialValue: isHovered)
     }
 
@@ -64,6 +68,9 @@ struct ClipRow: View {
                 .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(.secondary))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if let queuePosition {
+                QueueBadge(position: queuePosition, isOnAccent: isSelected)
+            }
             if showsShortcut, let shortcutDigit {
                 ShortcutBadge(digit: shortcutDigit, isOnAccent: isSelected)
             }
@@ -79,7 +86,7 @@ struct ClipRow: View {
         // The label says what and where from; the value carries the text itself, as a list cell's would.
         .accessibilityValue(clip.kind == .image ? "" : title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityHint("Press Return to paste")
+        .accessibilityHint(queuePosition.map { "Queued, number \($0). Press Return to paste" } ?? "Press Return to paste")
     }
 
     // MARK: Text
@@ -166,5 +173,21 @@ private struct ShortcutBadge: View {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .fill(isOnAccent ? AnyShapeStyle(.white.opacity(0.2)) : AnyShapeStyle(.quaternary))
             )
+    }
+}
+
+/// "#2": where a queued clip is in the paste queue.
+private struct QueueBadge: View {
+    let position: Int
+    let isOnAccent: Bool
+
+    var body: some View {
+        Text("\(position)")
+            .font(.caption.monospacedDigit().weight(.semibold))
+            .foregroundStyle(isOnAccent ? AnyShapeStyle(.white) : AnyShapeStyle(Color.accentColor))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(Capsule().strokeBorder(isOnAccent ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(Color.accentColor), lineWidth: 1))
+            .accessibilityHidden(true)
     }
 }

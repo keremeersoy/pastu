@@ -184,8 +184,33 @@ public final class ClipListModel {
             if deletedClips.count > Self.undoLimit { deletedClips.removeFirst() }
         }
         try? store.delete(id: clip.id)
+        queue.remove(id: clip.id)
         forgetSnippet(of: clip.id)
         reloadLoaded()   // clamps the selection into range
+    }
+
+    /// Clips collected to be pasted one after another. Survives the panel closing: it is pasted afterwards.
+    public let queue = PasteQueue()
+
+    /// Adds the selected clip to the queue and moves on to the next row, so a run of clips can be collected quickly.
+    public func addSelectedToQueue() {
+        guard let clip = selectedClip else { return }
+        let message: String
+        if queue.add(clip) {
+            moveSelection(by: 1)
+            message = "Added to queue (\(queue.count))"
+        } else if queue.isFull, queue.position(of: clip.id) == nil {
+            message = "The queue is full (\(PasteQueue.limit))"
+        } else {
+            message = "Already in the queue"
+        }
+        notice = message
+    }
+
+    public func clearQueue() {
+        guard !queue.isEmpty else { return }
+        queue.clear()
+        notice = "Queue cleared"
     }
 
     /// How many deletes ⌘Z can undo in one panel session.
