@@ -308,6 +308,44 @@ extension ShellTests {
         #expect(model.queue.isEmpty)
     }
 
+    // MARK: Memory
+
+    /// A closed panel holds no views, which is most of what it would otherwise keep in memory.
+    @Test func aHiddenPanelReleasesItsViews() async throws {
+        let controller = PanelController(model: try queueModel(), canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        #expect(controller.panel.contentView != nil)
+        controller.hide()
+        for _ in 0..<20 where controller.panel.contentView != nil { await pump(0.05) }
+        #expect(controller.panel.contentView == nil)
+    }
+
+    @Test func thePanelWorksAgainAfterReleasingItsViews() async throws {
+        let model = try queueModel()
+        let controller = PanelController(model: model, canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        controller.hide()
+        await pump(0.2)
+        controller.show()
+        defer { controller.hide() }
+        await pump(0.3)
+        #expect(controller.panel.contentView != nil)
+        #expect(controller.isVisible)
+        try #require(await searchFieldHasFocus(controller.panel))
+    }
+
+    /// Hiding and showing again at once (the shortcut pressed twice quickly) must not leave the new panel empty.
+    @Test func showingRightAfterHidingKeepsTheViews() async throws {
+        let controller = PanelController(model: try queueModel(), canAutoPaste: { true }, onSelect: { _ in })
+        controller.show()
+        controller.hide()
+        controller.show()
+        defer { controller.hide() }
+        await pump(0.3)
+        #expect(controller.isVisible)
+        #expect(controller.panel.contentView != nil)
+    }
+
     // MARK: Undo delete
 
     @Test func commandZRestoresTheClipDeletedLast() async throws {

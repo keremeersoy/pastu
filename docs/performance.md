@@ -57,11 +57,29 @@ On the same Mac, with a real history, in two situations:
 | Running for more than a day, panel opened many times, pictures read | 104 MB (peak 163 MB) | 162 MB |
 
 A fresh Pastu is small. The long-running one grew to about seven times that, mostly in small heap allocations
-(67 MB) rather than pictures (Image IO and IOSurface together are about 15 MB). Reading the text in pictures loads
-Apple's recognition models, and opening the panel fills the thumbnail and preview caches, so the growth comes from
-use. Which of them stays resident has not been verified; issue #15 tracks it. To find out: use a fresh launch as the
-baseline, then measure again after the panel was opened a few hundred times, and after a text-recognition pass with
-"Find text in pictures" switched on versus off.
+(67 MB) rather than pictures (Image IO and IOSurface together are about 15 MB).
+
+### Is there a leak?
+
+`MemoryGrowthBenchmark` opens and closes the panel 400 times on a history of 500 text clips and 20 screenshots and
+prints the process footprint along the way (`PASTU_BENCH=1 swift test --filter MemoryGrowthBenchmark`):
+
+| | Footprint |
+|---|---|
+| before the first open | 31 MB |
+| after the 1st open | 55 MB |
+| after 25 opens | 71 MB |
+| after 100 / 200 / 300 / 400 opens | 71.3 / 71.8 / 72.2 / 72.8 MB |
+
+The first opens are a one-time cost (SwiftUI, fonts, glass resources). After that the line is flat: about 4 KB per open,
+which is not worth chasing (100 opens a day is 0.4 MB). Reading the text in 60 pictures peaked at about 100 MB above
+the pictures themselves and fell back within three seconds, so the recognition models do not stay resident either.
+**No leak was found.** The 104 MB came from what a long-running Pastu legitimately keeps: the views of the closed
+panel, caches, and the memory of the last text-recognition pass.
+
+The one thing that was avoidable: a closed panel kept its whole SwiftUI view tree alive until the next open. It now
+releases it (the next `show()` builds a fresh one anyway), which brings a closed panel in the benchmark from 72 MB to
+58 MB.
 
 ## Picture thumbnails
 

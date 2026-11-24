@@ -179,6 +179,17 @@ final class PanelController: NSObject, NSWindowDelegate {
         commandKeys.stop()
         panel.orderOut(nil)
         PanelCaches.panelDidHide(model: model)
+        releaseViewsWhenIdle()
+    }
+
+    /// A hidden panel keeps no views: `show()` builds a fresh one every time anyway, and the SwiftUI view tree and
+    /// its glass resources are most of what a closed panel would otherwise hold on to. Done a turn later, because
+    /// `hide()` is often called from inside one of those views' own actions (Return, a menu item).
+    private func releaseViewsWhenIdle() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.panel.isVisible else { return }
+            self.panel.contentView = nil
+        }
     }
 
     /// Clicking away closes the panel. A row's context menu is the exception: if its tracking loop takes key status,
