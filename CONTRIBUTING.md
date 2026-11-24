@@ -41,8 +41,35 @@ and the scripts must unlock it without a prompt. Never distribute builds signed 
 ### Releasing
 
 Pushing a tag `vX.Y.Z` (after bumping `Resources/Info.plist` and adding a `## [X.Y.Z]` section to `CHANGELOG.md`)
-runs the release workflow: it tests, builds, publishes the zip, and then commits the new version and SHA-256 to
+runs the release workflow (which refuses a changelog section with no entries): it tests, builds, publishes the zip, and then commits the new version and SHA-256 to
 `Casks/pastu.rb` on `main`. Nothing to edit by hand; `scripts/update-cask.sh` is the same step for a manual fix.
+
+## Project layout
+
+```
+Sources/PastuCore/        UI-free logic, unit-tested
+  Storage/                ClipStore (SQLite + FTS5): schema and migrations, queries, retention, undo, picture text
+  Clipboard/              pasteboard capture, privacy filter, recording state, ignored apps
+  Panel/                  what the panel shows: list model, search highlighting, kinds, colours, paste queue
+  Settings/               every setting and its stored form: theme, shortcut, limits, login item, welcome guide
+  Pictures/               reading the text in pictures (the recogniser is a protocol; Vision lives in the app)
+Sources/Pastu/            thin AppKit/SwiftUI shell
+  App/                    main, app delegate (wiring), AppSettings (all settings in one place), paths
+  Menu/                   the menu bar item and its menu
+  Panel/                  the NSPanel, its SwiftUI views, thumbnails and previews
+  Paste/                  pasting into other apps, the global hotkey
+  Settings/               the Settings window and the welcome guide
+  System/                 small wrappers around macOS: window focus, app lookup, Vision, System Settings
+Tests/PastuCoreTests/     mirrors PastuCore (fast, no windows)
+Tests/PastuTests/         mirrors Pastu (opens real windows; needs a GUI session); Support/ has shared helpers
+Casks/pastu.rb            the Homebrew cask, updated by the release workflow
+scripts/                  build, icon, signing and measurement scripts
+docs/                     design documents and performance numbers
+```
+
+New logic goes in `PastuCore` with a test; the shell only draws and wires. A new setting is a small observable
+class in `PastuCore/Settings` that takes a `SettingsStore`, a key in `DefaultsKeys` (pinned by a test), a field in
+`AppSettings`, and a section in the Settings window.
 
 ## Tests
 

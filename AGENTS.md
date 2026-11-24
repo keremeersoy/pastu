@@ -8,9 +8,10 @@ This file is for AI coding assistants (and the humans using them). The rules are
 Pastu is a local-first macOS clipboard manager: Swift 6, SwiftUI + AppKit (`NSPanel`), SQLite with FTS5,
 Swift Package Manager, **zero dependencies**. macOS 15+; building needs Xcode 26+ (macOS 26 SDK).
 
-- `Sources/PastuCore`: UI-independent logic (capture, privacy filter, storage, search). Unit-tested.
-- `Sources/Pastu`: thin AppKit/SwiftUI shell. Panel views live in `Sources/Pastu/Panel`.
-- `Tests/PastuCoreTests` (fast) and `Tests/PastuTests` (open real windows; need a GUI session).
+- `Sources/PastuCore`: UI-independent logic, unit-tested, in `Storage`, `Clipboard`, `Panel`, `Settings`, `Pictures`.
+- `Sources/Pastu`: thin AppKit/SwiftUI shell, in `App`, `Menu`, `Panel`, `Paste`, `Settings`, `System`.
+- `Tests/PastuCoreTests` (fast) and `Tests/PastuTests` (open real windows; need a GUI session) mirror those folders.
+- The full tree, and how to add a setting, is in [CONTRIBUTING.md](CONTRIBUTING.md#project-layout).
 
 ## Rules
 
