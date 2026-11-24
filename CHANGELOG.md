@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-24
+
 ### Added
 - Colour clips (`#1e90ff`, `rgb(30, 144, 255)`, `hsl(…)`) show a swatch in the list and a large swatch with the hex and rgb values in the preview.
 - A thin divider between pinned and recent clips.
@@ -114,7 +116,8 @@ Tagged but never released: the release build stopped on the flaky test fixed in 
 - Text containing NUL characters is stored whole instead of being truncated (which could merge different clips).
 - Deleted and pruned clips are overwritten in the database file (`secure_delete`).
 
-[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/keremeersoy/pastu/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/keremeersoy/pastu/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/keremeersoy/pastu/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/keremeersoy/pastu/compare/v0.2.0...v0.3.0

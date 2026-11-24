@@ -30,7 +30,7 @@ brew tap keremeersoy/pastu https://github.com/keremeersoy/pastu && brew trust ke
 Homebrew asks you to trust taps that are not part of Homebrew itself; `brew trust` does that for this one tap.
 The cask lives in this repository (`Casks/pastu.rb`) and is updated automatically with every release.
 
-**Or download** [Pastu-0.5.0.zip](https://github.com/keremeersoy/pastu/releases/download/v0.5.0/Pastu-0.5.0.zip),
+**Or download** [Pastu-0.5.1.zip](https://github.com/keremeersoy/pastu/releases/download/v0.5.1/Pastu-0.5.1.zip),
 unzip it and move `Pastu.app` to Applications.
 
 Requires macOS 15 or later on Apple Silicon.
