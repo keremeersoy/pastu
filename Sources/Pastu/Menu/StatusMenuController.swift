@@ -25,20 +25,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     var storageError: StorageProblem?
     var onShowPanel: () -> Void = {}
 
-    /// How the alert and the About window take focus and give it back; replaceable for tests.
-    @MainActor
-    struct Focus {
-        var frontmostApp: @MainActor () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication }
-        var activatePastu: @MainActor () -> Void = { NSApp.activate() }
-        var isPastuActive: @MainActor () -> Bool = { NSApp.isActive }
-        var reactivate: @MainActor (NSRunningApplication) -> Void = { app in
-            // Activation is cooperative since macOS 14: the active app has to yield to the one it hands over to.
-            NSApp.yieldActivation(to: app)
-            app.activate(from: .current, options: [])
-        }
-    }
-
-    var focus = Focus()
+    /// Gives focus to Pastu's windows and alerts and back again; its `focus` hooks are replaceable for tests.
+    let presenter = WindowPresenter()
     /// Runs the Clear History alert; replaceable so tests can answer it.
     var runAlert: (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }
     /// Shows the About window and returns it, or nil when it was open already; replaceable for tests.
@@ -53,7 +41,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let hotKeys: HotKeySettings
     private let glassAvailable: Bool
 
-    private var appBeforeWindow: NSRunningApplication?
     private var statusItem: NSStatusItem?
     private var accessWarningItem: NSMenuItem?
     private var storageWarningItem: NSMenuItem?
@@ -208,7 +195,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc func clearHistory() {
         guard let store else { return }
         // An accessory app is not frontmost; without this the alert can open behind other windows.
-        let previous = activatePastu()
+        let previous = presenter.activatePastu()
         let alert = NSAlert()
         alert.messageText = "Clear clipboard history?"
         alert.informativeText = "All clips except pinned ones will be deleted. This cannot be undone."
@@ -216,7 +203,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         alert.addButton(withTitle: "Clear History")
         alert.addButton(withTitle: "Cancel")
         let answer = runAlert(alert)
-        giveFocusBack(to: previous)
+        presenter.giveFocusBack(to: previous)
         guard answer == .alertFirstButtonReturn else { return }
         do {
             try store.clear(keepPinned: true)
@@ -230,45 +217,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     }
 
     @objc func showAbout() {
-        present(showAboutPanel)
+        presenter.present(showAboutPanel)
     }
 
     @objc func showSettings() {
-        present(showSettingsWindow)
-    }
-
-    /// Brings Pastu forward, shows a window, and gives focus back to the previous app when that window closes.
-    private func present(_ show: @MainActor () -> NSWindow?) {
-        let previous = activatePastu()
-        // Nil when it is open already: the app to go back to was remembered the first time.
-        guard let window = show() else { return }
-        appBeforeWindow = previous
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(presentedWindowWillClose(_:)), name: NSWindow.willCloseNotification, object: window
-        )
-    }
-
-    @objc private func presentedWindowWillClose(_ notification: Notification) {
-        NotificationCenter.default.removeObserver(
-            self, name: NSWindow.willCloseNotification, object: notification.object
-        )
-        giveFocusBack(to: appBeforeWindow)
-        appBeforeWindow = nil
-    }
-
-    /// Brings Pastu to the front and returns the app that was there, for `giveFocusBack`.
-    private func activatePastu() -> NSRunningApplication? {
-        let previous = focus.frontmostApp()
-        focus.activatePastu()
-        return previous
-    }
-
-    /// An accessory app stays frontmost after its alert or window closes, and the panel does not activate anything:
-    /// without this, the next ⌘⇧V and Return would send ⌘V to Pastu itself and the paste would be lost. Does nothing
-    /// when the user already moved to another app.
-    private func giveFocusBack(to app: NSRunningApplication?) {
-        guard let app, app != .current, focus.isPastuActive() else { return }
-        focus.reactivate(app)
+        presenter.present(showSettingsWindow)
     }
 
     /// The standard panel's window has no public accessor: it is the one that became visible.

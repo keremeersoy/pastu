@@ -185,7 +185,7 @@ import Testing
         let controller = makeController(pasteboard: raw)
         var activated = false
         var reactivated: [NSRunningApplication] = []
-        controller.focus = StatusMenuController.Focus(
+        controller.presenter.focus = WindowPresenter.Focus(
             // Once Pastu is active it is itself the frontmost app, so the previous one must be read before that.
             frontmostApp: { activated ? .current : previous },
             activatePastu: { activated = true },
