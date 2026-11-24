@@ -41,6 +41,14 @@ jobs:
             echo "Resources/Info.plist says $PLIST but the tag says $VERSION"; exit 1
           fi
           grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG.md has no [$VERSION] section"; exit 1; }
+          # An empty section would publish release notes with nothing in them.
+          ENTRIES="$(awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on && /^- / { n++ }
+            END { print n + 0 }
+          ' CHANGELOG.md)"
+          [ "$ENTRIES" -gt 0 ] || { echo "CHANGELOG.md [$VERSION] section has no entries"; exit 1; }
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Test
         shell: bash   # -eo pipefail, so a failing `swift test` is not hidden by `tee`
@@ -85,10 +93,12 @@ jobs:
             echo "### Known limitations and unverified areas"
             echo "- Not signed with a Developer ID and not notarized; Accessibility may need to be granted again after an update."
             echo "- The history (including copied pictures and screenshots) is stored unencrypted, protected by file permissions only."
-            echo "- Not yet checked by hand: the Liquid Glass look and Dark mode, pasting a picture into another app,"
-            echo "  ⌘⌫/⌘I on a real keyboard, the menu bar items, multiple displays, full-screen apps and Spaces."
+            echo "- Not yet checked by hand on every Mac: the Liquid Glass look and Dark mode, dragging clips and the paste"
+            echo "  queue into other apps, the menu bar items, multiple displays, full-screen apps and Spaces."
+            echo "- Reading the text in pictures has been tried on generated test images, not on a wide range of real screenshots."
             echo "- How the macOS 15.4+ clipboard-privacy prompt treats Pastu has not been observed."
-            echo "- Panel-open latency has not been measured. The source app of a clip is a best guess."
+            echo "- The panel opens in about 30–45 ms of main-thread work (docs/performance.md); idle memory, about 100 MB, is"
+            echo "  higher than it should be. The source app of a clip is a best guess."
             echo "- Search terms shorter than 3 characters are case-insensitive for ASCII letters only."
             echo "- Apple Silicon only; the app icon is temporary."
           } > notes.md

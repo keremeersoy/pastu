@@ -17,6 +17,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [0.5.0] - 2026-11-24
 
+### Added
+- Search finds the words inside screenshots and pictures. Text is read on this Mac with Apple's text recognition (nothing is sent anywhere), in the background; pictures already in your history are caught up a few seconds after launch. Switch it off with "Find text in pictures" in Settings. The database is upgraded once (a new search index), and recognised text counts toward the size limit.
+
 ## [0.4.0] - 2026-11-23
 
 ### Added
