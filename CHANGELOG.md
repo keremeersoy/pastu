@@ -6,6 +6,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The Settings window no longer grows past the screen: it is as tall as its content up to the screen height, and the form scrolls.
+- The last step of the welcome guide shows why "Open Pastu at login" cannot be switched on (a copy outside the Applications folder) instead of an unexplained dead switch.
+
 ## [0.5.0] - 2026-11-24
 
 ## [0.4.0] - 2026-11-23

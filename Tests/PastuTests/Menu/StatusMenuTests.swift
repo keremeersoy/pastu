@@ -6,34 +6,31 @@ import Testing
 @MainActor
 @Suite struct StatusMenuTests {
     private func makeController(
-        pasteboard: NSPasteboard, theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = true,
-        hotKeys: HotKeySettings = HotKeySettings { _ in true }
+        pasteboard: NSPasteboard, settings: AppSettings = .inMemory(), glassAvailable: Bool = true
     ) -> StatusMenuController {
         StatusMenuController(
-            recording: RecordingState(), ignoredApps: IgnoredApps(),
-            systemPasteboard: SystemPasteboard(pasteboard: pasteboard),
-            theme: theme, glassAvailable: glassAvailable, hotKeys: hotKeys
+            settings: settings, systemPasteboard: SystemPasteboard(pasteboard: pasteboard), glassAvailable: glassAvailable
         )
     }
 
     /// Builds the menu without adding a real item to the menu bar, on a private pasteboard.
     private func withMenu(
-        theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = true,
+        settings: AppSettings = .inMemory(), glassAvailable: Bool = true,
         _ body: (StatusMenuController, NSMenu) -> Void
     ) {
         let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
         defer { raw.releaseGlobally() }
-        let controller = makeController(pasteboard: raw, theme: theme, glassAvailable: glassAvailable)
+        let controller = makeController(pasteboard: raw, settings: settings, glassAvailable: glassAvailable)
         controller.install(inStatusBar: false)
         body(controller, controller.menuForTesting)
     }
 
     private func withMenuThrowing(
-        theme: ThemeSettings, _ body: (StatusMenuController, NSMenu) throws -> Void
+        settings: AppSettings, _ body: (StatusMenuController, NSMenu) throws -> Void
     ) throws {
         let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
         defer { raw.releaseGlobally() }
-        let controller = makeController(pasteboard: raw, theme: theme)
+        let controller = makeController(pasteboard: raw, settings: settings)
         controller.install(inStatusBar: false)
         try body(controller, controller.menuForTesting)
     }
@@ -47,10 +44,11 @@ import Testing
 
     /// The menu shows the shortcut the user chose, refreshed every time the menu opens.
     @Test func showItemFollowsTheChosenShortcut() {
-        let hotKeys = HotKeySettings { _ in true }
+        let settings = AppSettings.inMemory()
+        let hotKeys = settings.hotKeys
         let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
         defer { raw.releaseGlobally() }
-        let controller = makeController(pasteboard: raw, hotKeys: hotKeys)
+        let controller = makeController(pasteboard: raw, settings: settings)
         controller.install(inStatusBar: false)
         let menu = controller.menuForTesting
         _ = hotKeys.set(HotKeyCombo(keyCode: 8, modifiers: [.command, .option]))
@@ -122,17 +120,18 @@ import Testing
         withMenu { _, menu in
             #expect(checked(themeMenu(menu)!) == ["System", "Liquid Glass"])
         }
-        let theme = ThemeSettings()
-        theme.appearance = .dark
-        theme.material = .solid
-        withMenu(theme: theme) { _, menu in
+        let settings = AppSettings.inMemory()
+        settings.theme.appearance = .dark
+        settings.theme.material = .solid
+        withMenu(settings: settings) { _, menu in
             #expect(checked(themeMenu(menu)!) == ["Dark", "Solid"])
         }
     }
 
     @Test func choosingAnItemChangesTheThemeAndMovesTheCheckmark() throws {
-        let theme = ThemeSettings()
-        try withMenuThrowing(theme: theme) { _, menu in
+        let settings = AppSettings.inMemory()
+        let theme = settings.theme
+        try withMenuThrowing(settings: settings) { _, menu in
             let submenu = try #require(themeMenu(menu))
             let dark = try #require(submenu.items.first { $0.title == "Dark" })
             choose(dark)

@@ -3,25 +3,15 @@ import Testing
 @testable import Pastu
 @testable import PastuCore
 
-/// Stands in for `SMAppService`: tests must never register the real app as a login item.
-@MainActor
-final class StubLoginItem: LoginItemService {
-    var status: LoginItemStatus
-    init(status: LoginItemStatus = .disabled) { self.status = status }
-    func register() throws { status = .enabled }
-    func unregister() throws { status = .disabled }
-}
-
 extension ShellTests {
 @MainActor
 @Suite struct SettingsWindowTests {
     private func makeController(
-        glassAvailable: Bool = true, loginStatus: LoginItemStatus = .disabled
+        glassAvailable: Bool = true, loginStatus: LoginItemStatus = .disabled, maxContentHeight: CGFloat? = nil
     ) -> SettingsWindowController {
         SettingsWindowController(
-            theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem(status: loginStatus)),
-            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: IgnoredApps(), queueSettings: QueueSettings(), pictureText: PictureTextSettings(),
-            glassAvailable: glassAvailable
+            settings: .inMemory(loginStatus: loginStatus), glassAvailable: glassAvailable,
+            maxContentHeight: { maxContentHeight ?? SettingsWindowController.heightThatFitsTheScreen() }
         )
     }
 
@@ -162,6 +152,48 @@ extension ShellTests {
         let content = try #require(window.contentView)
         #expect(accessibilityElement(containing: "Find text in pictures", in: content) != nil)
         #expect(accessibilityElement(containing: "nothing is sent anywhere", in: content) != nil)
+    }
+
+    // MARK: Size
+
+    /// The window must fit the screen: the long list of settings scrolls instead of growing past the display.
+    @Test func theWindowIsNeverTallerThanItsLimit() throws {
+        let controller = makeController(maxContentHeight: 300)
+        let window = try #require(controller.show())
+        defer { window.close() }
+        let content = try #require(window.contentView)
+        #expect(content.frame.height <= 300)
+        #expect(content.frame.height > 100)
+    }
+
+    @Test func aRoomyScreenGetsTheWholeListWithoutScrolling() throws {
+        let tall = makeController(maxContentHeight: 10_000)
+        let window = try #require(tall.show())
+        defer { window.close() }
+        let capped = makeController(maxContentHeight: 300)
+        let small = try #require(capped.show())
+        defer { small.close() }
+        #expect(try #require(window.contentView).frame.height > 600)
+        #expect(try #require(small.contentView).frame.height < (try #require(window.contentView).frame.height))
+    }
+
+    @Test func theDefaultLimitFitsTheMainScreen() throws {
+        let screen = try #require(NSScreen.main)
+        #expect(SettingsWindowController.heightThatFitsTheScreen() < screen.visibleFrame.height)
+        #expect(SettingsWindowController.heightThatFitsTheScreen() > 300)
+        let window = try #require(makeController().show())
+        defer { window.close() }
+        #expect(window.frame.height <= screen.visibleFrame.height)
+    }
+
+    @Test func theLastSectionIsReachableOnASmallWindow() async throws {
+        enableAccessibilityTree()
+        let window = try #require(makeController(maxContentHeight: 300).show())
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(300))
+        let content = try #require(window.contentView)
+        // Off-screen rows are still in the accessibility tree of a scroll view: scrolling is possible.
+        #expect(accessibilityElement(containing: "Material", in: content) != nil)
     }
 }
 }

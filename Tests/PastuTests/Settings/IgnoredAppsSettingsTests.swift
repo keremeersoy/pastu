@@ -17,20 +17,16 @@ extension ShellTests {
         #expect(IgnoredAppChoice.bundleIdentifier(at: URL(fileURLWithPath: "/etc/hosts")) == nil)
     }
 
-    private func controller(ignored: IgnoredApps) -> SettingsWindowController {
-        SettingsWindowController(
-            theme: ThemeSettings(), launchAtLogin: LaunchAtLogin(service: StubLoginItem()),
-            hotKeys: HotKeySettings { _ in true }, retention: RetentionSettings(), ignoredApps: ignored, queueSettings: QueueSettings(), pictureText: PictureTextSettings(),
-            glassAvailable: true
-        )
+    private func controller(_ settings: AppSettings) -> SettingsWindowController {
+        SettingsWindowController(settings: settings, glassAvailable: true)
     }
 
     @Test func theWindowListsIgnoredAppsByNameAndFallsBackToTheIdentifier() async throws {
         enableAccessibilityTree()
-        let ignored = IgnoredApps()
-        ignored.add("com.apple.calculator")
-        ignored.add("com.example.gone")
-        let window = try #require(controller(ignored: ignored).show())
+        let settings = AppSettings.inMemory()
+        settings.ignoredApps.add("com.apple.calculator")
+        settings.ignoredApps.add("com.example.gone")
+        let window = try #require(controller(settings).show())
         defer { window.close() }
         try await Task.sleep(for: .milliseconds(300))
         let content = try #require(window.contentView)
@@ -40,20 +36,20 @@ extension ShellTests {
 
     @Test func removingAnAppFromTheListStopsIgnoringIt() async throws {
         enableAccessibilityTree()
-        let ignored = IgnoredApps()
-        ignored.add("com.example.gone")
-        let window = try #require(controller(ignored: ignored).show())
+        let settings = AppSettings.inMemory()
+        settings.ignoredApps.add("com.example.gone")
+        let window = try #require(controller(settings).show())
         defer { window.close() }
         try await Task.sleep(for: .milliseconds(300))
         let content = try #require(window.contentView)
         let button = try #require(accessibilityElement(containing: "Stop ignoring com.example.gone", in: content))
         #expect(accessibilityPress(button))
-        #expect(ignored.bundleIdentifiers.isEmpty)
+        #expect(settings.ignoredApps.bundleIdentifiers.isEmpty)
     }
 
     @Test func anEmptyListSaysHowToAddOne() async throws {
         enableAccessibilityTree()
-        let window = try #require(controller(ignored: IgnoredApps()).show())
+        let window = try #require(controller(.inMemory()).show())
         defer { window.close() }
         try await Task.sleep(for: .milliseconds(300))
         let content = try #require(window.contentView)

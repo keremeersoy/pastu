@@ -63,10 +63,7 @@ struct OnboardingView: View {
         case .ready:
             VStack(alignment: .leading, spacing: 12) {
                 Text("Pastu lives in the menu bar. Press \(hotKeys.combo.displayString) to try it. Settings are in the menu.")
-                Toggle("Open Pastu at login", isOn: Binding(
-                    get: { launchAtLogin.isOn }, set: { launchAtLogin.setEnabled($0) }
-                ))
-                .disabled(!launchAtLogin.isAvailable)
+                LoginItemControl(launchAtLogin: launchAtLogin)
             }
         }
     }

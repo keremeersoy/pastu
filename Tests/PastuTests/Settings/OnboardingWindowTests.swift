@@ -12,17 +12,17 @@ extension ShellTests {
         var trusted = false
     }
 
-    private func make(_ calls: Calls = Calls(), settings: SettingsStore = InMemorySettings()) -> (OnboardingWindowController, Onboarding) {
-        let onboarding = Onboarding(store: settings)
+    private func make(
+        _ calls: Calls = Calls(), store: SettingsStore = InMemorySettings(), loginStatus: LoginItemStatus = .disabled
+    ) -> (OnboardingWindowController, Onboarding) {
+        let settings = AppSettings(store: store, loginItem: StubLoginItem(status: loginStatus), registerHotKey: { _ in true })
         let controller = OnboardingWindowController(
-            onboarding: onboarding,
-            hotKeys: HotKeySettings { _ in true },
-            launchAtLogin: LaunchAtLogin(service: StubLoginItem()),
+            settings: settings,
             isTrusted: { calls.trusted },
             requestAccessibility: { calls.requested += 1 },
             openAccessibilitySettings: { calls.openedSettings += 1 }
         )
-        return (controller, onboarding)
+        return (controller, settings.onboarding)
     }
 
     private func settle() async throws { try await Task.sleep(for: .milliseconds(300)) }
@@ -102,7 +102,7 @@ extension ShellTests {
     @Test func doneOnTheLastStepFinishesAndClosesTheWindow() async throws {
         enableAccessibilityTree()
         let settings = InMemorySettings()
-        let (controller, onboarding) = make(settings: settings)
+        let (controller, onboarding) = make(store: settings)
         onboarding.next()
         onboarding.next()
         let window = try #require(controller.show())
@@ -129,6 +129,43 @@ extension ShellTests {
         let window = try #require(controller.show())
         defer { window.close() }
         #expect(onboarding.step == .pasting)
+    }
+
+    // MARK: Open at login on the last step
+
+    @Test func theLastStepOffersOpenAtLoginAsAWorkingToggle() async throws {
+        enableAccessibilityTree()
+        let (controller, onboarding) = make(loginStatus: .disabled)
+        onboarding.next(); onboarding.next()
+        let window = try #require(controller.show())
+        defer { window.close() }
+        try await settle()
+        let content = try #require(window.contentView)
+        let toggle = try #require(accessibilityElement(containing: "Open Pastu at login", in: content))
+        #expect(toggle.isAccessibilityEnabled?() ?? true, "the switch must be usable when the app can be managed")
+        #expect(!shows("isn't available", in: window))
+    }
+
+    /// A copy outside /Applications cannot be a login item. The step must say so instead of showing a dead switch.
+    @Test func whenLoginItemsAreUnavailableTheLastStepExplainsWhy() async throws {
+        enableAccessibilityTree()
+        let (controller, onboarding) = make(loginStatus: .unavailable)
+        onboarding.next(); onboarding.next()
+        let window = try #require(controller.show())
+        defer { window.close() }
+        try await settle()
+        #expect(shows("isn't available for this copy of Pastu", in: window))
+        #expect(shows("Applications folder", in: window))
+    }
+
+    @Test func whenMacOSWaitsForApprovalTheLastStepPointsToSystemSettings() async throws {
+        enableAccessibilityTree()
+        let (controller, onboarding) = make(loginStatus: .requiresApproval)
+        onboarding.next(); onboarding.next()
+        let window = try #require(controller.show())
+        defer { window.close() }
+        try await settle()
+        #expect(shows("System Settings → General → Login Items", in: window))
     }
 }
 }

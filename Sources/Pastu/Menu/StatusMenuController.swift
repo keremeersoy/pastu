@@ -65,15 +65,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     /// - Parameter glassAvailable: whether Liquid Glass can be drawn (macOS 26+); replaceable for tests.
     init(
-        recording: RecordingState, ignoredApps: IgnoredApps, systemPasteboard: SystemPasteboard,
-        theme: ThemeSettings = ThemeSettings(), glassAvailable: Bool = StatusMenuController.systemHasGlass,
-        hotKeys: HotKeySettings = HotKeySettings { _ in true }
+        settings: AppSettings, systemPasteboard: SystemPasteboard,
+        glassAvailable: Bool = StatusMenuController.systemHasGlass
     ) {
-        self.recording = recording
-        self.ignoredApps = ignoredApps
+        recording = settings.recording
+        ignoredApps = settings.ignoredApps
+        theme = settings.theme
+        hotKeys = settings.hotKeys
         self.systemPasteboard = systemPasteboard
-        self.theme = theme
-        self.hotKeys = hotKeys
         self.glassAvailable = glassAvailable
         super.init()
     }

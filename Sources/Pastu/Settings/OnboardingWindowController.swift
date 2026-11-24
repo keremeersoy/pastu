@@ -5,22 +5,18 @@ import SwiftUI
 /// Owns the welcome guide window: one at a time. Closing it, by Done or the red button, finishes the guide.
 @MainActor
 final class OnboardingWindowController: NSObject, NSWindowDelegate {
-    private let onboarding: Onboarding
-    private let hotKeys: HotKeySettings
-    private let launchAtLogin: LaunchAtLogin
+    private let settings: AppSettings
     private let isTrusted: () -> Bool
     private let requestAccessibility: () -> Void
     private let openAccessibilitySettings: () -> Void
     private var window: NSWindow?
 
     init(
-        onboarding: Onboarding, hotKeys: HotKeySettings, launchAtLogin: LaunchAtLogin,
+        settings: AppSettings,
         isTrusted: @escaping () -> Bool, requestAccessibility: @escaping () -> Void,
         openAccessibilitySettings: @escaping () -> Void
     ) {
-        self.onboarding = onboarding
-        self.hotKeys = hotKeys
-        self.launchAtLogin = launchAtLogin
+        self.settings = settings
         self.isTrusted = isTrusted
         self.requestAccessibility = requestAccessibility
         self.openAccessibilitySettings = openAccessibilitySettings
@@ -38,7 +34,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.title = PastuInfo.name
         window.delegate = self
         window.contentView = NSHostingView(rootView: OnboardingView(
-            onboarding: onboarding, hotKeys: hotKeys, launchAtLogin: launchAtLogin,
+            onboarding: settings.onboarding, hotKeys: settings.hotKeys, launchAtLogin: settings.launchAtLogin,
             isTrusted: isTrusted, requestAccessibility: requestAccessibility,
             openAccessibilitySettings: openAccessibilitySettings,
             finish: { [weak self] in self?.window?.close() }
@@ -50,6 +46,6 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        onboarding.finish()
+        settings.onboarding.finish()
     }
 }
