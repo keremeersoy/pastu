@@ -8,8 +8,7 @@ extension ClipStore {
     /// Returns how many were deleted.
     @discardableResult
     public func prune(_ policy: RetentionPolicy, now: Date = Date()) throws -> Int {
-        try exec("BEGIN")
-        do {
+        try inTransaction {
             var removed = 0
             if let maxAge = policy.maxAge {
                 let stmt = try prepare("DELETE FROM clips WHERE last_copied_at < ?1 AND pinned = 0")
@@ -32,11 +31,7 @@ extension ClipStore {
             if let cap = policy.maxTotalBytes {
                 removed += try pruneToSize(cap)
             }
-            try exec("COMMIT")
             return removed
-        } catch {
-            try? exec("ROLLBACK")
-            throw error
         }
     }
 

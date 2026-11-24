@@ -512,3 +512,48 @@ import Testing
         #expect(model.reloads == before + 2)
     }
 }
+
+@MainActor
+@Suite struct PinnedDividerTests {
+    private func model(_ texts: [String], pinned: Set<String>) throws -> ClipListModel {
+        let store = try ClipStore()
+        for (i, text) in texts.enumerated() {
+            let id = try store.insert(CapturedClip(text: text, sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: Double(i + 1))))
+            if pinned.contains(text) { try store.setPinned(id: id, true) }
+        }
+        return ClipListModel(store: store)
+    }
+
+    /// The list shows pinned clips first, then the rest: the divider goes between the two groups.
+    @Test func theDividerSitsBetweenPinnedAndRecentClips() throws {
+        let model = try model(["a", "b", "c", "d"], pinned: ["a", "b"])
+        #expect(model.clips.map(\.isPinned) == [true, true, false, false])
+        #expect(model.pinnedDividerRow == 2)
+    }
+
+    @Test func noDividerWithoutPinnedClips() throws {
+        #expect(try model(["a", "b"], pinned: []).pinnedDividerRow == nil)
+    }
+
+    @Test func noDividerWhenEverythingIsPinned() throws {
+        #expect(try model(["a", "b"], pinned: ["a", "b"]).pinnedDividerRow == nil)
+    }
+
+    @Test func noDividerInAnEmptyList() throws {
+        #expect(try model([], pinned: []).pinnedDividerRow == nil)
+    }
+
+    @Test func oneUnpinnedClipAfterOnePinnedStillGetsADivider() throws {
+        #expect(try model(["a", "b"], pinned: ["b"]).pinnedDividerRow == 1)
+    }
+
+    /// While searching, the divider keeps meaning the same: pinned matches first, then the other matches.
+    @Test func theDividerFollowsTheSearchResult() throws {
+        let model = try model(["apple", "apricot", "banana"], pinned: ["apple"])
+        model.query = "ap"
+        #expect(model.clips.map(\.text) == ["apple", "apricot"])
+        #expect(model.pinnedDividerRow == 1)
+        model.query = "banana"
+        #expect(model.pinnedDividerRow == nil)
+    }
+}

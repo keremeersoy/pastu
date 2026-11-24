@@ -6,7 +6,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Colour clips (`#1e90ff`, `rgb(30, 144, 255)`, `hsl(…)`) show a swatch in the list and a large swatch with the hex and rgb values in the preview.
+- A thin divider between pinned and recent clips.
+
 ### Fixed
+- A database upgrade that fails half way is rolled back as a whole instead of leaving a transaction open (every multi-statement change now runs in one transaction).
 - The Settings window no longer grows past the screen: it is as tall as its content up to the screen height, and the form scrolls.
 - The last step of the welcome guide shows why "Open Pastu at login" cannot be switched on (a copy outside the Applications folder) instead of an unexplained dead switch.
 

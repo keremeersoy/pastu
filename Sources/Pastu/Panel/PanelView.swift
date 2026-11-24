@@ -197,6 +197,10 @@ struct PanelView: View {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(model.clips.enumerated()), id: \.element.id) { index, clip in
                         let isSelected = index == model.selectedIndex
+                        if index == model.pinnedDividerRow {
+                            // Pinned clips above, the rest below. Decoration only: VoiceOver reads each row's own state.
+                            Divider().padding(.horizontal, 8).padding(.vertical, 2).accessibilityHidden(true)
+                        }
                         ClipRow(
                             clip: clip, isSelected: isSelected,
                             shortcutDigit: index < 9 ? index + 1 : nil,

@@ -706,3 +706,60 @@ import Testing
         #expect(kinds == [.text, .link, .text, .link, .text])
     }
 }
+
+/// A migration step that fails half way must leave the database as it was, not half upgraded and not stuck in an open
+/// transaction.
+@Suite struct TransactionTests {
+    private struct Boom: Error {}
+
+    private func tableExists(_ store: ClipStore, _ name: String) throws -> Bool {
+        let stmt = try store.prepare("SELECT 1 FROM sqlite_master WHERE name = ?1")
+        defer { sqlite3_finalize(stmt) }
+        store.bind(name, at: 1, in: stmt)
+        return sqlite3_step(stmt) == SQLITE_ROW
+    }
+
+    @Test func aFailureRollsEverythingBack() throws {
+        let store = try ClipStore()
+        #expect(throws: Boom.self) {
+            try store.inTransaction {
+                try store.exec("CREATE TABLE scratch_one (x)")
+                try store.exec("CREATE TABLE scratch_two (x)")
+                throw Boom()
+            }
+        }
+        #expect(try !tableExists(store, "scratch_one"))
+        #expect(try !tableExists(store, "scratch_two"))
+    }
+
+    @Test func aSQLFailureInTheMiddleRollsBackTheEarlierStatements() throws {
+        let store = try ClipStore()
+        #expect(throws: ClipStoreError.self) {
+            try store.inTransaction {
+                try store.exec("CREATE TABLE scratch_one (x)")
+                try store.exec("THIS IS NOT SQL")
+            }
+        }
+        #expect(try !tableExists(store, "scratch_one"))
+    }
+
+    @Test func successCommits() throws {
+        let store = try ClipStore()
+        try store.inTransaction { try store.exec("CREATE TABLE scratch_one (x)") }
+        #expect(try tableExists(store, "scratch_one"))
+    }
+
+    /// After a failure the connection is usable again: no transaction is left open.
+    @Test func theStoreWorksAfterAFailedTransaction() throws {
+        let store = try ClipStore()
+        _ = try? store.inTransaction { throw Boom() }
+        try store.insert(CapturedClip(text: "still works", sourceBundleIdentifier: nil, date: Date()))
+        try store.inTransaction { try store.exec("CREATE TABLE scratch_one (x)") }
+        #expect(try store.recent().count == 1)
+    }
+
+    @Test func transactionsReturnTheirResult() throws {
+        let store = try ClipStore()
+        #expect(try store.inTransaction { 42 } == 42)
+    }
+}

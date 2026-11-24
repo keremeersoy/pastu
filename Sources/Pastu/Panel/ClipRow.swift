@@ -45,6 +45,8 @@ struct ClipRow: View {
             Group {
                 if clip.kind == .image {
                     ThumbnailView(info: picture, isOnAccent: isSelected)
+                } else if let color {
+                    ColorSwatchView(color: color)
                 } else {
                     AppIconView(bundleIdentifier: clip.sourceBundleIdentifier, size: 24, isOnAccent: isSelected)
                 }
@@ -128,6 +130,13 @@ struct ClipRow: View {
         return RoundedRectangle(cornerRadius: PanelMetrics.innerRadius, style: .continuous).fill(fill)
     }
 
+    /// The colour, when the clip is nothing but one (`#1e90ff`): the row shows a swatch instead of the app icon.
+    private var color: ColorValue? { Self.color(of: clip) }
+
+    private static func color(of clip: StoredClip) -> ColorValue? {
+        clip.kind == .text ? ColorValue(clip.text) : nil
+    }
+
     /// What is in memory right now. A miss draws the placeholder; `.task` fills it in without blocking the panel.
     private var picture: ImageCache.Info? {
         guard clip.kind == .image else { return nil }
@@ -150,11 +159,12 @@ struct ClipRow: View {
     }
 
     private static func accessibilityLabel(for clip: StoredClip, picture: ImageCache.Info?) -> String {
-        ClipFormatting.accessibilityLabel(
+        let label = ClipFormatting.accessibilityLabel(
             kind: clip.kind, appName: AppLookup.name(for: clip.sourceBundleIdentifier),
             pixelSize: picture.map { ($0.width, $0.height) },
             copiedAt: clip.lastCopiedAt, now: Date(), isPinned: clip.isPinned
         )
+        return color(of: clip).map { label + ", " + $0.spokenDescription } ?? label
     }
 }
 

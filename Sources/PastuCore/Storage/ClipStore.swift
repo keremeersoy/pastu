@@ -165,6 +165,21 @@ public final class ClipStore {
         guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw lastError() }
     }
 
+    /// Runs `body` in one transaction: all of it happens, or (if it throws) none of it. Used by every multi-statement
+    /// change, so a failure never leaves a transaction open or the database half changed.
+    @discardableResult
+    func inTransaction<T>(_ body: () throws -> T) throws -> T {
+        try exec("BEGIN")
+        do {
+            let result = try body()
+            try exec("COMMIT")
+            return result
+        } catch {
+            try? exec("ROLLBACK")
+            throw error
+        }
+    }
+
     func prepare(_ sql: String) throws -> OpaquePointer {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else { throw lastError() }

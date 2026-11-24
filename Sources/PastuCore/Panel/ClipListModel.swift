@@ -96,6 +96,13 @@ public final class ClipListModel {
         clips.indices.contains(selectedIndex) ? clips[selectedIndex] : nil
     }
 
+    /// The row where the unpinned clips begin, when pinned clips come before it: the list draws a divider there.
+    /// Nil when there is no pinned clip, or nothing but pinned clips.
+    public var pinnedDividerRow: Int? {
+        guard let firstUnpinned = clips.firstIndex(where: { !$0.isPinned }), firstUnpinned > 0 else { return nil }
+        return firstUnpinned
+    }
+
     /// Re-runs the current search (e.g. after a new copy) over every row loaded so far, so a refresh
     /// never throws the user back to the first page. The selection stays on the same clip when it is still there.
     public func refresh() {

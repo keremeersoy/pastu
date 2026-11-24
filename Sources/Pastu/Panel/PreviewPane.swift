@@ -13,10 +13,14 @@ struct PreviewPane: View {
             if let clip {
                 let content = PreviewContent.cached(for: clip, query: query)
                 VStack(alignment: .leading, spacing: 12) {
-                    switch content.body {
-                    case .picture: picturePreview(for: clip)
-                    case let .link(host, full): linkPreview(host: host, full: full)
-                    case let .text(head, tail): textPreview(head: head, tail: tail, content: content, clip: clip)
+                    if clip.kind == .text, let color = ColorValue(clip.text) {
+                        ColorPreview(color: color)
+                    } else {
+                        switch content.body {
+                        case .picture: picturePreview(for: clip)
+                        case let .link(host, full): linkPreview(host: host, full: full)
+                        case let .text(head, tail): textPreview(head: head, tail: tail, content: content, clip: clip)
+                        }
                     }
                     MetadataGrid(clip: clip, size: size(of: clip, content: content))
                 }

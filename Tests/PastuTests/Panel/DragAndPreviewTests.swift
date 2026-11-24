@@ -4,14 +4,6 @@ import UniformTypeIdentifiers
 @testable import Pastu
 @testable import PastuCore
 
-private func makePNG(_ width: Int, _ height: Int) -> Data {
-    let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
-        hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-    )!
-    return rep.representation(using: .png, properties: [:])!
-}
-
 extension ShellTests {
 @MainActor
 @Suite struct DragAndPreviewTests {

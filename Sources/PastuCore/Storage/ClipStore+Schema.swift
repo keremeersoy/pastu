@@ -46,16 +46,16 @@ extension ClipStore {
             // v2: substring search. Databases with the old word-based index get a trigram index,
             // rebuilt from the clips table (the text itself is untouched).
             if try ftsUsesWordTokenizer() {
-                try exec("""
-                    BEGIN;
-                    DROP TABLE clips_fts;
-                    CREATE VIRTUAL TABLE clips_fts USING fts5(
-                        text, content='clips', content_rowid='id',
-                        tokenize='trigram remove_diacritics 1'
-                    );
-                    INSERT INTO clips_fts (clips_fts) VALUES ('rebuild');
-                    COMMIT;
-                    """)
+                try inTransaction {
+                    try exec("""
+                        DROP TABLE clips_fts;
+                        CREATE VIRTUAL TABLE clips_fts USING fts5(
+                            text, content='clips', content_rowid='id',
+                            tokenize='trigram remove_diacritics 1'
+                        );
+                        INSERT INTO clips_fts (clips_fts) VALUES ('rebuild');
+                        """)
+                }
             }
             try exec("PRAGMA user_version = 2")
         }
@@ -76,8 +76,8 @@ extension ClipStore {
             if !(try columnExists("ocr_text", in: "clips")) {
                 try exec("ALTER TABLE clips ADD COLUMN ocr_text TEXT")
             }
-            try exec("""
-                BEGIN;
+            try inTransaction {
+                try exec("""
                 DROP TRIGGER IF EXISTS clips_ai;
                 DROP TRIGGER IF EXISTS clips_ad;
                 DROP TRIGGER IF EXISTS clips_au;
@@ -97,8 +97,8 @@ extension ClipStore {
                     INSERT INTO clips_fts (rowid, text, ocr_text) VALUES (new.id, new.text, new.ocr_text);
                 END;
                 INSERT INTO clips_fts (clips_fts) VALUES ('rebuild');
-                COMMIT;
                 """)
+            }
             try exec("PRAGMA user_version = 4")
         }
     }
