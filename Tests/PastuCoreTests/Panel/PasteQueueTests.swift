@@ -183,3 +183,16 @@ import Testing
         #expect(model.notice == "Queue cleared")
     }
 }
+
+@MainActor
+@Suite struct PasteQueueFileTests {
+    @Test func filesGetNoSeparatorBetweenThem() throws {
+        let store = try ClipStore()
+        try store.insert(CapturedClip(text: "a", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 1)))
+        try store.insert(.files(paths: ["/x/one.txt"], sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 2)))
+        try store.insert(CapturedClip(text: "c", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 3)))
+        let queue = PasteQueue()
+        try store.recent().sorted { $0.lastCopiedAt < $1.lastCopiedAt }.forEach { _ = queue.add($0) }
+        #expect(queue.plan(separator: .newline).map(\.suffix) == ["\n", "", ""])
+    }
+}

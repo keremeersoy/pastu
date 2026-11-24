@@ -6,6 +6,11 @@ public enum ClipKind: Sendable, Equatable {
     case link
     /// Stored as a PNG; never produced by `detect`, which only looks at text.
     case image
+    /// Files copied in Finder: the paths are stored, not the content. Never produced by `detect` either.
+    case file
+
+    /// Plain text or a link: the kinds whose clip is its text, as opposed to a picture or files.
+    public var isText: Bool { self == .text || self == .link }
 
     /// Longer than this is never treated as a link: it is more likely a data blob than something to open.
     static let maxLinkLength = 2048
@@ -31,12 +36,13 @@ public enum ClipKind: Sendable, Equatable {
     }
 }
 
-/// The panel's type filter. Cycled with Tab: all, text, links, images.
+/// The panel's type filter. Cycled with Tab: all, text, links, images, files.
 public enum ClipFilter: Sendable, Equatable, CaseIterable {
     case all
     case text
     case links
     case images
+    case files
 
     /// `nil` means "no restriction".
     public var kind: ClipKind? {
@@ -45,6 +51,7 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         case .text: .text
         case .links: .link
         case .images: .image
+        case .files: .file
         }
     }
 
@@ -54,17 +61,19 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         case .all: .text
         case .text: .links
         case .links: .images
-        case .images: .all
+        case .images: .files
+        case .files: .all
         }
     }
 
-    /// The filter Shift-Tab moves to, wrapping around to `.images`.
+    /// The filter Shift-Tab moves to, wrapping around to `.files`.
     public var previous: ClipFilter {
         switch self {
-        case .all: .images
+        case .all: .files
         case .text: .all
         case .links: .text
         case .images: .links
+        case .files: .images
         }
     }
 
@@ -75,6 +84,7 @@ public enum ClipFilter: Sendable, Equatable, CaseIterable {
         case .text: "Text"
         case .links: "Links"
         case .images: "Images"
+        case .files: "Files"
         }
     }
 }

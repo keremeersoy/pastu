@@ -12,8 +12,15 @@ public struct StoredClip: Equatable, Sendable {
     public let isPinned: Bool
     /// `.image` for pictures; for text clips computed from the text (text or link).
     public let kind: ClipKind
+    /// The full paths of a file clip, in the order they were copied; empty for every other kind.
+    public internal(set) var files: [String] = []
     /// True when the clip was copied with RTF or HTML formatting that can be pasted back.
     public internal(set) var hasFormatting: Bool = false
+}
+
+extension StoredClip {
+    /// What the panel shows for a file clip: the file names, without their folders.
+    public var fileNames: [String] { files.map { ($0 as NSString).lastPathComponent } }
 }
 
 /// The formatting stored with a text clip.
@@ -76,8 +83,8 @@ public final class ClipStore {
     @discardableResult
     public func insert(_ clip: CapturedClip) throws -> Int64 {
         let stmt = try prepare("""
-            INSERT INTO clips (text, source_bundle_id, first_copied_at, last_copied_at, kind, image, rtf, html)
-            VALUES (?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7)
+            INSERT INTO clips (text, source_bundle_id, first_copied_at, last_copied_at, kind, image, rtf, html, files, ocr_text)
+            VALUES (?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             ON CONFLICT(text) DO UPDATE SET
                 last_copied_at = excluded.last_copied_at,
                 copy_count = copy_count + 1,
@@ -90,10 +97,13 @@ public final class ClipStore {
         bind(clip.text, at: 1, in: stmt)
         bind(clip.sourceBundleIdentifier, at: 2, in: stmt)
         sqlite3_bind_double(stmt, 3, clip.date.timeIntervalSince1970)
-        bind(clip.imagePNG == nil ? "text" : "image", at: 4, in: stmt)
+        bind(clip.files != nil ? "file" : (clip.imagePNG == nil ? "text" : "image"), at: 4, in: stmt)
         bind(blob: clip.imagePNG, at: 5, in: stmt)
         bind(blob: clip.rtf, at: 6, in: stmt)
         bind(blob: clip.html, at: 7, in: stmt)
+        // The paths, so the files can be put back; and the names, which is what search looks at.
+        bind(clip.files.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }, at: 8, in: stmt)
+        bind(clip.files.map { $0.map { ($0 as NSString).lastPathComponent }.joined(separator: ", ") }, at: 9, in: stmt)
         guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
         let id = sqlite3_column_int64(stmt, 0)
         // Drain so the statement completes before finalize.

@@ -124,19 +124,31 @@ public enum ClipFormatting {
 
     // MARK: VoiceOver
 
+    /// "1 file", "3 files".
+    public static func fileCount(_ count: Int) -> String {
+        count == 1 ? "1 file" : "\(count) files"
+    }
+
     /// One spoken sentence for a row, e.g. "Image from Preview, 1440 by 900, 2 hours ago, pinned".
     public static func accessibilityLabel(
         kind: ClipKind, appName: String?, pixelSize: (width: Int, height: Int)?,
-        copiedAt: Date, now: Date, isPinned: Bool
+        copiedAt: Date, now: Date, isPinned: Bool, fileNames: [String] = []
     ) -> String {
         var parts: [String] = []
         let noun = switch kind {
         case .text: "Text"
         case .link: "Link"
         case .image: "Image"
+        case .file: "Files"
         }
         parts.append(appName.map { "\(noun) from \($0)" } ?? noun)
         if kind == .image, let pixelSize { parts.append("\(pixelSize.width) by \(pixelSize.height)") }
+        if kind == .file, !fileNames.isEmpty {
+            // The names are the content of a file clip, so they are read out, a few of them.
+            let shown = fileNames.prefix(3).joined(separator: ", ")
+            let more = fileNames.count > 3 ? " and \(fileNames.count - 3) more" : ""
+            parts.append("\(fileCount(fileNames.count)): \(shown)\(more)")
+        }
         parts.append(spokenTime(from: copiedAt, to: now))
         if isPinned { parts.append("pinned") }
         return parts.joined(separator: ", ")

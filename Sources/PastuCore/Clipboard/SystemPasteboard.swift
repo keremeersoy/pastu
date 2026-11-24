@@ -27,6 +27,12 @@ public final class SystemPasteboard: ClipboardSource {
         if let html { pasteboard.setData(html, forType: .html) }
     }
 
+    /// Replaces the clipboard with files, as Finder does when they are copied.
+    public func write(files: [URL]) {
+        pasteboard.clearContents()
+        pasteboard.writeObjects(files as [NSURL])
+    }
+
     /// Writes the picture as PNG. Older apps that ask for TIFF still get one: the system converts on demand.
     public func write(imagePNG: Data) {
         pasteboard.clearContents()
@@ -40,9 +46,13 @@ public final class SystemPasteboard: ClipboardSource {
         var imagePNG: Data?
         var rtf: Data?
         var html: Data?
+        var fileURLs: [URL] = []
         if includingContent {
+            fileURLs = readFileURLs()
             text = pasteboard.string(forType: .string)
-            if text?.isEmpty ?? true {
+            if !fileURLs.isEmpty {
+                // The files are the copy; the text Finder adds is only their names.
+            } else if text?.isEmpty ?? true {
                 imagePNG = readPicture()
             } else {
                 rtf = pasteboard.data(forType: .rtf)
@@ -55,8 +65,19 @@ public final class SystemPasteboard: ClipboardSource {
             sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
             imagePNG: imagePNG,
             rtf: rtf,
-            html: html
+            html: html,
+            fileURLs: fileURLs
         )
+    }
+
+    /// Only real files: web addresses on the pasteboard are not file clips. A file reference
+    /// (`file:///.file/id=…`) is turned into its path, so the clip survives a rename.
+    private func readFileURLs() -> [URL] {
+        let urls = pasteboard.readObjects(
+            forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL] ?? []
+        var seen = Set<String>()
+        return urls.map { ($0 as NSURL).filePathURL ?? $0 }.filter { seen.insert($0.path).inserted }
     }
 
     private func readPicture() -> Data? {

@@ -144,7 +144,7 @@ import Testing
         #expect(model.selectedIndex == 0)
     }
 
-    @Test func cycleFilterGoesAllTextLinksImagesAll() throws {
+    @Test func cycleFilterGoesAllTextLinksImagesFilesAll() throws {
         let model = ClipListModel(store: try makeStore(["a"]))
         #expect(model.filter == .all)
         model.cycleFilter()
@@ -153,6 +153,8 @@ import Testing
         #expect(model.filter == .links)
         model.cycleFilter()
         #expect(model.filter == .images)
+        model.cycleFilter()
+        #expect(model.filter == .files)
         model.cycleFilter()
         #expect(model.filter == .all)
     }
@@ -354,8 +356,10 @@ import Testing
         #expect(model.hasMore == false)
     }
 
-    @Test func reverseCycleGoesAllImagesLinksTextAll() throws {
+    @Test func reverseCycleGoesAllFilesImagesLinksTextAll() throws {
         let model = ClipListModel(store: try makeStore(["a"]))
+        model.cycleFilter(reverse: true)
+        #expect(model.filter == .files)
         model.cycleFilter(reverse: true)
         #expect(model.filter == .images)
         model.cycleFilter(reverse: true)

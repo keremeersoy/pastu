@@ -78,7 +78,7 @@ final class PasteCoordinator {
     ) async {
         guard !steps.isEmpty else { return }
         guard isTrusted() else {
-            let combined = steps.filter { $0.clip.kind != .image }.map { $0.clip.text + $0.suffix }.joined()
+            let combined = steps.filter { $0.clip.kind.isText }.map { $0.clip.text + $0.suffix }.joined()
             monitor?.copyToPasteboard(combined)
             requestAccessibilityIfNeeded()
             return
@@ -97,10 +97,11 @@ final class PasteCoordinator {
     /// Writes one queued clip, with its separator when it is text, and moves it up the history.
     private func put(_ clip: StoredClip, suffix: String) -> Bool {
         guard let store, let monitor else { return false }
-        if clip.kind == .image {
-            guard ClipPasteboardWriter.copy(clip, from: store, using: monitor) else { return false }
-        } else {
+        if clip.kind.isText {
             monitor.copyToPasteboard(clip.text + suffix)
+        } else {
+            // Pictures and files: written whole, with no separator.
+            guard ClipPasteboardWriter.copy(clip, from: store, using: monitor) else { return false }
         }
         try? store.markUsed(id: clip.id)
         return true

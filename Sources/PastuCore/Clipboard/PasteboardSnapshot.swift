@@ -10,10 +10,12 @@ public struct PasteboardSnapshot: Equatable, Sendable {
     /// The text's rich formatting, if the source offered it. Like `text`, only filled when the content is read.
     public var rtf: Data?
     public var html: Data?
+    /// The files on the pasteboard (copied in Finder), empty when there are none. Only filled when the content is read.
+    public var fileURLs: [URL]
 
     public init(
         types: [String], text: String?, sourceBundleIdentifier: String? = nil, imagePNG: Data? = nil,
-        rtf: Data? = nil, html: Data? = nil
+        rtf: Data? = nil, html: Data? = nil, fileURLs: [URL] = []
     ) {
         self.types = types
         self.text = text
@@ -21,5 +23,6 @@ public struct PasteboardSnapshot: Equatable, Sendable {
         self.imagePNG = imagePNG
         self.rtf = rtf
         self.html = html
+        self.fileURLs = fileURLs
     }
 }

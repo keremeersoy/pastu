@@ -69,6 +69,43 @@ import Testing
         return (SystemPasteboard(pasteboard: raw), raw)
     }
 
+    @Test func fileURLsRoundTrip() throws {
+        let (system, raw) = makePasteboard()
+        defer { raw.releaseGlobally() }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pastu-pb-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let one = dir.appendingPathComponent("one.txt"), two = dir.appendingPathComponent("two words.txt")
+        try Data("1".utf8).write(to: one)
+        try Data("2".utf8).write(to: two)
+
+        system.write(files: [one, two])
+        let snapshot = system.snapshot(includingContent: true)
+        #expect(snapshot.fileURLs.map(\.path) == [one.path, two.path])
+    }
+
+    @Test func aMetadataOnlySnapshotDoesNotReadFiles() throws {
+        let (system, raw) = makePasteboard()
+        defer { raw.releaseGlobally() }
+        system.write(files: [URL(fileURLWithPath: "/tmp")])
+        #expect(system.snapshot(includingContent: false).fileURLs.isEmpty)
+    }
+
+    @Test func textCopiesHaveNoFiles() {
+        let (system, raw) = makePasteboard()
+        defer { raw.releaseGlobally() }
+        system.write(text: "hello")
+        #expect(system.snapshot(includingContent: true).fileURLs.isEmpty)
+    }
+
+    @Test func aWebLinkIsNotAFile() {
+        let (system, raw) = makePasteboard()
+        defer { raw.releaseGlobally() }
+        raw.clearContents()
+        raw.writeObjects([URL(string: "https://example.com/a.txt")! as NSURL])
+        #expect(system.snapshot(includingContent: true).fileURLs.isEmpty)
+    }
+
     @Test func formattedTextRoundTrips() {
         let (system, raw) = makePasteboard()
         defer { raw.releaseGlobally() }

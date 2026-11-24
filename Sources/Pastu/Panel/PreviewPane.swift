@@ -18,6 +18,7 @@ struct PreviewPane: View {
                     } else {
                         switch content.body {
                         case .picture: picturePreview(for: clip)
+                        case .files: FilesPreview(clip: clip)
                         case let .link(host, full): linkPreview(host: host, full: full)
                         case let .text(head, tail): textPreview(head: head, tail: tail, content: content, clip: clip)
                         }
@@ -150,6 +151,7 @@ private struct MetadataGrid: View {
 struct PreviewContent {
     enum Body {
         case picture
+        case files
         case link(host: String, full: AttributedString)
         /// `tail` starts at the line holding the first match; `head` is the text before it (nil when there is none).
         case text(head: AttributedString?, tail: AttributedString)
@@ -209,6 +211,10 @@ struct PreviewContent {
     init(clip: StoredClip, query: String) {
         if clip.kind == .image {
             self.init(body: .picture, monospace: false, before: 0, after: 0, scrolls: false, stats: "")
+            return
+        }
+        if clip.kind == .file {
+            self.init(body: .files, monospace: false, before: 0, after: 0, scrolls: false, stats: ClipFormatting.fileCount(clip.files.count))
             return
         }
         let stats = ClipFormatting.stats(clip.text)

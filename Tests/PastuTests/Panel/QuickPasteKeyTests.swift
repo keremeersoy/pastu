@@ -118,6 +118,9 @@ extension ShellTests {
         #expect(model.filter == .images)
         NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
         await pump(0.2)
+        #expect(model.filter == .files)
+        NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
+        await pump(0.2)
         #expect(model.filter == .all)
     }
 
@@ -138,7 +141,10 @@ extension ShellTests {
         try #require(await searchFieldHasFocus(panel), "first responder: \(String(describing: panel.firstResponder))")
         NSApp.sendEvent(keyEvent("\u{19}", keyCode: 48, modifiers: .shift, window: panel))
         await pump(0.2)
-        #expect(model.filter == .images, "first responder: \(String(describing: panel.firstResponder))")
+        #expect(model.filter == .files, "first responder: \(String(describing: panel.firstResponder))")
+        NSApp.sendEvent(keyEvent("\u{19}", keyCode: 48, modifiers: .shift, window: panel))
+        await pump(0.2)
+        #expect(model.filter == .images)
         NSApp.sendEvent(keyEvent("\u{19}", keyCode: 48, modifiers: .shift, window: panel))
         await pump(0.2)
         #expect(model.filter == .links)
@@ -387,6 +393,65 @@ extension ShellTests {
         #expect(titles(formattedMenu).contains("Paste with Formatting"))
         let plainMenu = try contextMenu(onRow: 1, in: controller.panel)
         #expect(!titles(plainMenu).contains("Paste with Formatting"))
+    }
+
+    // MARK: File clips
+
+    private func filesModel() throws -> (ClipListModel, cleanup: () -> Void) {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pastu-menu-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("report.txt")
+        try Data("x".utf8).write(to: file)
+        let store = try ClipStore()
+        try store.insert(CapturedClip(text: "plain", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 1)))
+        try store.insert(.files(paths: [file.path], sourceBundleIdentifier: "com.apple.finder", date: Date(timeIntervalSince1970: 2)))
+        return (ClipListModel(store: store), { try? FileManager.default.removeItem(at: dir) })
+    }
+
+    @Test func theRowMenuOffersShowInFinderOnlyForFiles() async throws {
+        let (model, cleanup) = try filesModel()
+        defer { cleanup() }
+        let controller = PanelController(model: model, canAutoPaste: { true }) { _ in }
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        enableAccessibilityTree()
+        await pump(0.3)
+        let fileMenu = try contextMenu(onRow: 0, in: controller.panel)
+        #expect(titles(fileMenu).contains("Show in Finder"))
+        let textMenu = try contextMenu(onRow: 1, in: controller.panel)
+        #expect(!titles(textMenu).contains("Show in Finder"))
+    }
+
+    @Test func showInFinderFromTheMenuRevealsTheFileAndKeepsThePanelOpen() async throws {
+        let (model, cleanup) = try filesModel()
+        defer { cleanup() }
+        var revealed: [URL] = []
+        let original = FinderReveal.shared
+        FinderReveal.shared = FinderReveal { revealed = $0 }
+        defer { FinderReveal.shared = original }
+        let controller = PanelController(model: model, canAutoPaste: { true }) { _ in }
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        enableAccessibilityTree()
+        await pump(0.3)
+        try choose("Show in Finder", in: try contextMenu(onRow: 0, in: controller.panel))
+        await pump(0.2)
+        #expect(revealed.map(\.lastPathComponent) == ["report.txt"])
+    }
+
+    @Test func tabReachesTheFilesFilter() async throws {
+        let (model, cleanup) = try filesModel()
+        defer { cleanup() }
+        let panel = try await queuePanel(model)
+        defer { panel.orderOut(nil) }
+        for _ in 0..<4 {
+            NSApp.sendEvent(keyEvent("\t", keyCode: 48, modifiers: [], window: panel))
+            await pump(0.1)
+        }
+        #expect(model.filter == .files)
+        #expect(model.clips.map(\.kind) == [.file])
     }
 
     // MARK: Memory

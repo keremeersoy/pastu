@@ -30,6 +30,10 @@ struct EmptyState: View {
                     ContentUnavailableView("No links yet", systemImage: "link")
                 case .images:
                     ContentUnavailableView("No images yet", systemImage: "photo")
+                case .files:
+                    ContentUnavailableView(
+                        "No files yet", systemImage: "doc",
+                        description: Text("Copy files in Finder and they show up here."))
                 }
             }
         }

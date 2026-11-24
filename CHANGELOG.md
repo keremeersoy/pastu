@@ -7,6 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- File clips: files copied in Finder are recorded as their own kind of clip. The list shows Finder's icon and the names, the preview lists every file with its folder (missing files are marked), search finds files by name, a new "Files" filter joins Tab, and ↩ pastes the files back (the ones that still exist). Only the paths are stored, never the contents. Row menu: Show in Finder. Dragging a single file out works; several files drag as their paths.
 - Paste with formatting: ⇧↩ (or "Paste with Formatting" in the row menu) pastes a text clip with the RTF/HTML formatting it was copied with; ↩ still pastes plain text. Formatting is stored per clip (at most 2 MB per flavour, never searched) and survives an undone delete. Thanks to @sethmfuller.
 
 ### Changed

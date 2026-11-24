@@ -36,10 +36,10 @@ public final class PasteQueue {
         clips = []
     }
 
-    /// What to paste, in order: each clip with the text that follows it. The last clip and pictures get none.
+    /// What to paste, in order: each clip with the text that follows it. The last clip, pictures and files get none.
     public func plan(separator: QueueSeparator) -> [(clip: StoredClip, suffix: String)] {
         clips.enumerated().map { index, clip in
-            (clip, index < clips.count - 1 && clip.kind != .image ? separator.text : "")
+            (clip, index < clips.count - 1 && clip.kind.isText ? separator.text : "")
         }
     }
 }

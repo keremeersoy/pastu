@@ -67,7 +67,7 @@ public final class ClipListModel {
     /// The snippet the clip's row shows instead of "App · time" for the current query (see
     /// `SearchHighlighter.rowSnippet`); nil for pictures, without a query, or when the title shows the match.
     public func rowSnippet(for clip: StoredClip) -> SearchHighlighter.Snippet? {
-        guard clip.kind != .image, !SearchHighlighter.terms(of: query).isEmpty else { return nil }
+        guard clip.kind.isText, !SearchHighlighter.terms(of: query).isEmpty else { return nil }
         if snippetCacheQuery != query {
             snippetCache = [:]
             snippetCacheQuery = query

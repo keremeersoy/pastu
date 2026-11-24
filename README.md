@@ -58,12 +58,12 @@ yourself.
 | ⌘⌫ | Delete a clip |
 | ⌘Z | Restore the clip you deleted last (until the panel closes) |
 | ⌘I | Never record copies from this clip's app |
-| Tab / ⇧Tab | Show all, text, links or images (⇧Tab goes backwards) |
+| Tab / ⇧Tab | Show all, text, links, images or files (⇧Tab goes backwards) |
 | ⌘/ | Show all shortcuts |
 | Esc | Clear the search first, then close |
 
 With the mouse: click a clip to select it, double click to paste it, right click for Paste, Copy, Pin, Delete and
-Ignore (and Open in Preview for pictures), or drag a clip into another app.
+Ignore (and Open in Preview for pictures, Show in Finder for files), or drag a clip into another app.
 
 The menu bar icon lets you pause recording, clear the history, manage ignored apps and open Settings.
 
@@ -89,7 +89,8 @@ The menu bar icon lets you pause recording, clear the history, manage ignored ap
   Solid (also under Settings…). Reduce Transparency in System Settings always gives a solid background.
 - Search also finds the words inside screenshots and pictures (read on your Mac with Apple's text recognition, switch
   it off in Settings…).
-- Text and pictures are supported, and colour codes like `#1e90ff` show a swatch. Files are not yet.
+- Text, pictures and files copied in Finder are supported, and colour codes like `#1e90ff` show a swatch. A file clip
+  remembers the paths, not the contents, and pastes the files back if they are still there.
 - The screenshots above show the panel's layout with sample data. On macOS 26 the real panel has a
   Liquid Glass background.
 - Some things have not been tested by hand yet, such as multiple displays and full-screen apps.

@@ -45,6 +45,8 @@ struct ClipRow: View {
             Group {
                 if clip.kind == .image {
                     ThumbnailView(info: picture, isOnAccent: isSelected)
+                } else if clip.kind == .file {
+                    FileIconView(path: clip.files.first)
                 } else if let color {
                     ColorSwatchView(color: color)
                 } else {
@@ -86,7 +88,7 @@ struct ClipRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(for: clip, picture: picture))
         // The label says what and where from; the value carries the text itself, as a list cell's would.
-        .accessibilityValue(clip.kind == .image ? "" : title)
+        .accessibilityValue(clip.kind.isText ? title : "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint(queuePosition.map { "Queued, number \($0). Press Return to paste" } ?? "Press Return to paste")
     }
@@ -94,7 +96,11 @@ struct ClipRow: View {
     // MARK: Text
 
     private var title: String {
-        clip.kind == .image ? "Image" : ClipFormatting.rowTitle(clip.text)
+        switch clip.kind {
+        case .image: "Image"
+        case .file: ClipFormatting.rowTitle(clip.fileNames.joined(separator: ", "))
+        case .text, .link: ClipFormatting.rowTitle(clip.text)
+        }
     }
 
     private func titleRanges(_ title: String) -> [Range<String.Index>] {
@@ -108,7 +114,7 @@ struct ClipRow: View {
             Text(highlighted(snippet.text, ranges: snippet.highlights, font: .subheadline))
         } else {
             let time = ClipFormatting.relativeTime(from: clip.lastCopiedAt, to: Date())
-            let size = picture.map { "\($0.width)×\($0.height)" }
+            let size = picture.map { "\($0.width)×\($0.height)" } ?? (clip.kind == .file ? ClipFormatting.fileCount(clip.files.count) : nil)
             Text([AppLookup.name(for: clip.sourceBundleIdentifier), size, time].compactMap { $0 }.joined(separator: " · "))
         }
     }
@@ -162,7 +168,8 @@ struct ClipRow: View {
         let label = ClipFormatting.accessibilityLabel(
             kind: clip.kind, appName: AppLookup.name(for: clip.sourceBundleIdentifier),
             pixelSize: picture.map { ($0.width, $0.height) },
-            copiedAt: clip.lastCopiedAt, now: Date(), isPinned: clip.isPinned
+            copiedAt: clip.lastCopiedAt, now: Date(), isPinned: clip.isPinned,
+            fileNames: clip.kind == .file ? clip.fileNames : []
         )
         return color(of: clip).map { label + ", " + $0.spokenDescription } ?? label
     }
@@ -199,5 +206,22 @@ private struct QueueBadge: View {
             .padding(.vertical, 1)
             .background(Capsule().strokeBorder(isOnAccent ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(Color.accentColor), lineWidth: 1))
             .accessibilityHidden(true)
+    }
+}
+
+/// A file clip's leading icon: Finder's icon for the first file, in the same slot a picture's thumbnail takes.
+struct FileIconView: View {
+    let path: String?
+
+    var body: some View {
+        Group {
+            if let path {
+                Image(nsImage: FileIcons.icon(forPath: path)).resizable()
+            } else {
+                Image(systemName: "doc").foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 24, height: 24)
+        .accessibilityHidden(true)
     }
 }

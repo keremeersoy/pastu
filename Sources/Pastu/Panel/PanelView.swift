@@ -183,6 +183,9 @@ struct PanelView: View {
             Button("Paste with Formatting") { act(on: clip, onSubmitFormatted) }
         }
         Button("Copy") { act(on: clip, onCopyOnly) }
+        if clip.kind == .file {
+            Button("Show in Finder") { act(on: clip) { FinderReveal.shared.show(clip) } }
+        }
         if clip.kind == .image {
             Button("Open in Preview") { act(on: clip) { PreviewOpener.shared.open(clip, imageData: imageData) } }
         }

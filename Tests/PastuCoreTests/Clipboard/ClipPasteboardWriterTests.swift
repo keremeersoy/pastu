@@ -9,6 +9,7 @@ private final class RecordingSource: ClipboardSource {
     var image: Data?
     var rtf: Data?
     var html: Data?
+    var files: [URL]?
 
     func snapshot(includingContent: Bool) -> PasteboardSnapshot {
         PasteboardSnapshot(types: [], text: includingContent ? text : nil, imagePNG: includingContent ? image : nil)
@@ -16,7 +17,8 @@ private final class RecordingSource: ClipboardSource {
     func write(text: String, rtf: Data?, html: Data?) {
         self.text = text; self.rtf = rtf; self.html = html; image = nil; changeCount += 1
     }
-    func write(imagePNG: Data) { image = imagePNG; text = nil; rtf = nil; html = nil; changeCount += 1 }
+    func write(imagePNG: Data) { image = imagePNG; text = nil; rtf = nil; html = nil; files = nil; changeCount += 1 }
+    func write(files: [URL]) { self.files = files; text = nil; image = nil; rtf = nil; html = nil; changeCount += 1 }
 }
 
 @MainActor
@@ -111,6 +113,61 @@ private final class RecordingSource: ClipboardSource {
     @Test func aFormattedWriteIsNeverRecaptured() throws {
         let (store, _, monitor, captured) = try setUp()
         ClipPasteboardWriter.copy(try formattedClip(store), from: store, using: monitor, keepFormatting: true)
+        monitor.poll()
+        #expect(captured() == 0)
+    }
+
+    // MARK: Files
+
+    /// Real files in a temporary folder, so "does it still exist" means what it says.
+    private func tempFiles(_ names: [String]) throws -> (paths: [String], cleanup: () -> Void) {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pastu-files-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let paths = try names.map { name -> String in
+            let url = dir.appendingPathComponent(name)
+            try Data("x".utf8).write(to: url)
+            return url.path
+        }
+        return (paths, { try? FileManager.default.removeItem(at: dir) })
+    }
+
+    private func fileClip(_ store: ClipStore, _ paths: [String]) throws -> StoredClip {
+        let id = try store.insert(.files(paths: paths, sourceBundleIdentifier: nil, date: Date()))
+        return try #require(try store.recent().first { $0.id == id })
+    }
+
+    @Test func fileClipsGoBackOnThePasteboardAsFiles() throws {
+        let (store, source, monitor, _) = try setUp()
+        let (paths, cleanup) = try tempFiles(["one.txt", "two.txt"])
+        defer { cleanup() }
+        let clip = try fileClip(store, paths)
+        #expect(ClipPasteboardWriter.copy(clip, from: store, using: monitor) == true)
+        #expect(source.files?.map(\.path) == paths)
+        #expect(source.text == nil)
+    }
+
+    @Test func filesThatAreGoneAreLeftOut() throws {
+        let (store, source, monitor, _) = try setUp()
+        let (paths, cleanup) = try tempFiles(["here.txt"])
+        defer { cleanup() }
+        let clip = try fileClip(store, paths + ["/no/such/dir/gone.txt"])
+        #expect(ClipPasteboardWriter.copy(clip, from: store, using: monitor) == true)
+        #expect(source.files?.map(\.path) == paths)
+    }
+
+    @Test func ifEveryFileIsGoneNothingIsWritten() throws {
+        let (store, source, monitor, _) = try setUp()
+        let clip = try fileClip(store, ["/no/such/dir/gone.txt"])
+        #expect(ClipPasteboardWriter.copy(clip, from: store, using: monitor) == false)
+        #expect(source.files == nil)
+        #expect(source.changeCount == 0, "the user's clipboard stays as it was")
+    }
+
+    @Test func aFileWriteIsNeverRecaptured() throws {
+        let (store, _, monitor, captured) = try setUp()
+        let (paths, cleanup) = try tempFiles(["one.txt"])
+        defer { cleanup() }
+        ClipPasteboardWriter.copy(try fileClip(store, paths), from: store, using: monitor)
         monitor.poll()
         #expect(captured() == 0)
     }

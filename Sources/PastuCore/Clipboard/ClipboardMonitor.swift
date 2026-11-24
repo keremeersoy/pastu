@@ -9,8 +9,10 @@ public protocol ClipboardSource: AnyObject {
     func snapshot(includingContent: Bool) -> PasteboardSnapshot
     /// Replaces the pasteboard contents with text, plus its RTF/HTML formatting when given.
     func write(text: String, rtf: Data?, html: Data?)
-    /// Replaces the pasteboard contents with a picture.
+    /// Replaces the pasteboard contents with picture bytes.
     func write(imagePNG: Data)
+    /// Replaces the pasteboard contents with files, the way copying them in Finder would.
+    func write(files: [URL])
 }
 
 extension ClipboardSource {
@@ -30,6 +32,18 @@ public struct CapturedClip: Equatable, Sendable {
     /// The copied text's RTF and HTML flavours when the source app offered them, otherwise nil.
     public var rtf: Data? = nil
     public var html: Data? = nil
+    /// The paths of the files copied in Finder, otherwise nil. The clip then stands for those files, not for text.
+    public var files: [String]? = nil
+
+    /// A file clip, keyed by a hash of the full paths so the same files copied again merge into one row, while the same
+    /// file names in two different folders stay two clips. The key never shows a path: the panel shows the names.
+    static func files(paths: [String], sourceBundleIdentifier: String? = nil, date: Date = Date()) -> CapturedClip {
+        let digest = SHA256.hash(data: Data(paths.joined(separator: "\n").utf8)).prefix(8)
+            .map { String(format: "%02x", $0) }.joined()
+        return CapturedClip(
+            text: "[files] \(digest)", sourceBundleIdentifier: sourceBundleIdentifier, date: date, files: paths
+        )
+    }
 
     /// An image clip, keyed by a hash of its bytes so the same picture copied twice merges into one row.
     static func image(png: Data, sourceBundleIdentifier: String? = nil, date: Date = Date()) -> CapturedClip {
@@ -107,6 +121,12 @@ public final class ClipboardMonitor {
         lastChangeCount = source.changeCount
     }
 
+    /// Puts files on the pasteboard, the way copying them in Finder would, without capturing our own write.
+    public func copyToPasteboard(files: [URL]) {
+        source.write(files: files)
+        lastChangeCount = source.changeCount
+    }
+
     /// Checks the pasteboard once. Public so tests can drive the monitor without a timer.
     public func poll() {
         let count = source.changeCount
@@ -121,7 +141,12 @@ public final class ClipboardMonitor {
         let snapshot = source.snapshot(includingContent: true)
         guard filter.decision(for: snapshot) == .record else { return }
 
-        if let text = snapshot.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if !snapshot.fileURLs.isEmpty {
+            // Finder offers the file names as text too; the files are the copy, the names are not.
+            onCapture(.files(
+                paths: snapshot.fileURLs.map(\.path), sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date()
+            ))
+        } else if let text = snapshot.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             onCapture(CapturedClip(
                 text: text, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date(),
                 rtf: Self.withinFormattingLimit(snapshot.rtf), html: Self.withinFormattingLimit(snapshot.html)

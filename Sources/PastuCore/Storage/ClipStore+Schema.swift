@@ -112,6 +112,14 @@ extension ClipStore {
             }
             try exec("PRAGMA user_version = 5")
         }
+        if try userVersion() < 6 {
+            // v6: files. A file clip stores its paths as a JSON array; the file names go into `ocr_text`, which the
+            // full-text index already covers, so files are found by name without another index change.
+            if !(try columnExists("files", in: "clips")) {
+                try exec("ALTER TABLE clips ADD COLUMN files TEXT")
+            }
+            try exec("PRAGMA user_version = 6")
+        }
     }
 
     private func ftsUsesWordTokenizer() throws -> Bool {

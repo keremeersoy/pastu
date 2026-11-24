@@ -57,13 +57,26 @@ import Testing
         #expect(ClipFilter.text.kind == .text)
         #expect(ClipFilter.links.kind == .link)
         #expect(ClipFilter.images.kind == .image)
+        #expect(ClipFilter.files.kind == .file)
     }
 
-    @Test func filterCyclesThroughAllTextLinksAndWraps() {
+    @Test func filterCyclesThroughAllTextLinksImagesFilesAndWraps() {
         #expect(ClipFilter.all.next == .text)
         #expect(ClipFilter.text.next == .links)
         #expect(ClipFilter.links.next == .images)
-        #expect(ClipFilter.images.next == .all)
+        #expect(ClipFilter.images.next == .files)
+        #expect(ClipFilter.files.next == .all)
+    }
+
+    @Test func filterTitlesAreShort() {
+        #expect(ClipFilter.allCases.map(\.title) == ["All", "Text", "Links", "Images", "Files"])
+    }
+
+    /// Files are never produced by looking at text: they are stored as their own kind.
+    @Test func textIsNeverDetectedAsAFile() {
+        #expect(ClipKind.detect("/Users/me/report.pdf") == .text)
+        #expect(ClipKind.detect("file:///Users/me/report.pdf") == .text)
+        #expect(ClipKind.detect("[files] 0123456789abcdef") == .text)
     }
 
     @Test func previousIsTheInverseOfNext() {

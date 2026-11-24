@@ -195,4 +195,50 @@ import Testing
         for _ in 0..<50 where seenAtPaste == nil { try? await Task.sleep(for: .milliseconds(20)) }
         #expect(seenAtPaste == rtf)
     }
+
+    // MARK: Files
+
+    @Test func aQueuedFileClipIsPastedAsTheFileItself() async throws {
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        defer { raw.releaseGlobally() }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pastu-queue-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("report.txt")
+        try Data("x".utf8).write(to: file)
+
+        let store = try ClipStore()
+        try store.insert(CapturedClip(text: "before", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 1)))
+        try store.insert(.files(paths: [file.path], sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 2)))
+        let queue = PasteQueue()
+        try store.recent().sorted { $0.lastCopiedAt < $1.lastCopiedAt }.forEach { _ = queue.add($0) }
+
+        var seen: [String] = []
+        let coordinator = PasteCoordinator(
+            sendPaste: {
+                let files = (raw.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+                seen.append(files.isEmpty ? (raw.string(forType: .string) ?? "<empty>") : "file:" + files.map(\.lastPathComponent).joined(separator: ","))
+            },
+            isTrusted: { true }, isPastuActive: { false }, hidePastu: {}
+        )
+        coordinator.store = store
+        coordinator.monitor = ClipboardMonitor(source: SystemPasteboard(pasteboard: raw), filter: PrivacyFilter()) { _ in }
+        await coordinator.pasteQueue(queue.plan(separator: .newline), startDelay: .zero, stepDelay: .zero)
+        #expect(seen == ["before\n", "file:report.txt"])
+    }
+
+    @Test func pastingAFileClipWritesFilesAndAGoneFileWritesNothing() async throws {
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        defer { raw.releaseGlobally() }
+        let store = try ClipStore()
+        let id = try store.insert(.files(paths: ["/no/such/dir/gone.txt"], sourceBundleIdentifier: nil, date: Date()))
+        let clip = try #require(try store.recent().first { $0.id == id })
+        var pastes = 0
+        let coordinator = PasteCoordinator(sendPaste: { pastes += 1 }, isTrusted: { true }, isPastuActive: { false }, hidePastu: {})
+        coordinator.store = store
+        coordinator.monitor = ClipboardMonitor(source: SystemPasteboard(pasteboard: raw), filter: PrivacyFilter()) { _ in }
+        coordinator.paste(clip)
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(pastes == 0, "nothing to paste, so no ⌘V is sent")
+    }
 }

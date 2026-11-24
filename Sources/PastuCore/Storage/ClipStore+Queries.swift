@@ -32,7 +32,7 @@ extension ClipStore {
     public func recent(limit: Int = 50, offset: Int = 0, kind: ClipKind? = nil) throws -> [StoredClip] {
         try query("""
             SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind,
-                   (c.rtf IS NOT NULL OR c.html IS NOT NULL)
+                   (c.rtf IS NOT NULL OR c.html IS NOT NULL), c.files
             FROM clips c
             WHERE \(Self.kindCondition(kind))
             ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1 OFFSET ?2
@@ -47,6 +47,7 @@ extension ClipStore {
         case .link?: "c.kind = 'text' AND pastu_is_link(c.text) = 1"
         case .text?: "c.kind = 'text' AND pastu_is_link(c.text) = 0"
         case .image?: "c.kind = 'image'"
+        case .file?: "c.kind = 'file'"
         }
     }
 
@@ -81,7 +82,7 @@ extension ClipStore {
 
         return try self.query("""
             SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind,
-                   (c.rtf IS NOT NULL OR c.html IS NOT NULL)
+                   (c.rtf IS NOT NULL OR c.html IS NOT NULL), c.files
             FROM \(source)
             WHERE \(conditions.joined(separator: " AND "))
             ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1 OFFSET ?2
@@ -108,7 +109,12 @@ extension ClipStore {
             if rc == SQLITE_DONE { break }
             guard rc == SQLITE_ROW else { throw lastError() }
             let text = Self.columnString(stmt, 1) ?? ""
-            let kind: ClipKind = Self.columnString(stmt, 7) == "image" ? .image : ClipKind.detect(text)
+            let kind: ClipKind
+            switch Self.columnString(stmt, 7) {
+            case "image": kind = .image
+            case "file": kind = .file
+            default: kind = ClipKind.detect(text)
+            }
             clips.append(StoredClip(
                 id: sqlite3_column_int64(stmt, 0),
                 text: text,
@@ -118,6 +124,8 @@ extension ClipStore {
                 copyCount: Int(sqlite3_column_int64(stmt, 5)),
                 isPinned: sqlite3_column_int64(stmt, 6) != 0,
                 kind: kind,
+                files: Self.columnString(stmt, 9).flatMap { $0.data(using: .utf8) }
+                    .flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? [],
                 hasFormatting: sqlite3_column_int64(stmt, 8) != 0
             ))
         }

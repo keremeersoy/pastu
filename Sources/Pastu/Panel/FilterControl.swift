@@ -82,6 +82,7 @@ extension ClipFilter {
         case .text: "text.alignleft"
         case .links: "link"
         case .images: "photo"
+        case .files: "doc"
         }
     }
 }

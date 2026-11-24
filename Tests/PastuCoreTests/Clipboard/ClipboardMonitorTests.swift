@@ -18,7 +18,7 @@ private final class FakeSource: ClipboardSource {
     func snapshot(includingContent: Bool) -> PasteboardSnapshot {
         snapshotCalls += 1
         var result = current
-        if includingContent { textReads += 1 } else { result.text = nil; result.imagePNG = nil }
+        if includingContent { textReads += 1 } else { result.text = nil; result.imagePNG = nil; result.fileURLs = [] }
         return result
     }
 
@@ -28,6 +28,10 @@ private final class FakeSource: ClipboardSource {
 
     func write(text: String, rtf: Data?, html: Data?) {
         copy(PasteboardSnapshot(types: ["public.utf8-plain-text"], text: text, rtf: rtf, html: html))
+    }
+
+    func write(files: [URL]) {
+        copy(PasteboardSnapshot(types: ["public.file-url"], text: nil, fileURLs: files))
     }
 }
 
@@ -66,6 +70,78 @@ private final class FakeSource: ClipboardSource {
         source.copy(PasteboardSnapshot(types: [], text: "hi", rtf: exact, html: nil))
         monitor.poll()
         #expect(received.first?.rtf == exact)
+    }
+
+    // MARK: Files
+
+    private func finderCopy(_ paths: [String], text: String? = nil, app: String? = "com.apple.finder") -> PasteboardSnapshot {
+        // Finder offers the names as text next to the file URLs.
+        PasteboardSnapshot(
+            types: ["public.file-url", "public.utf8-plain-text"],
+            text: text ?? paths.map { ($0 as NSString).lastPathComponent }.joined(separator: "\n"),
+            sourceBundleIdentifier: app, fileURLs: paths.map { URL(fileURLWithPath: $0) }
+        )
+    }
+
+    @Test func filesCopiedInFinderAreCapturedAsFilesNotAsTheirNames() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        source.copy(finderCopy(["/Users/me/a.txt", "/Users/me/b.txt"]))
+        monitor.poll()
+        #expect(received.count == 1)
+        #expect(received.first?.files == ["/Users/me/a.txt", "/Users/me/b.txt"])
+        #expect(received.first?.text.hasPrefix("[files] ") == true)
+        #expect(received.first?.sourceBundleIdentifier == "com.apple.finder")
+    }
+
+    @Test func filesWinOverAPictureToo() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        source.copy(PasteboardSnapshot(types: [], text: nil, imagePNG: Data([1, 2, 3]), fileURLs: [URL(fileURLWithPath: "/a/p.png")]))
+        monitor.poll()
+        #expect(received.first?.files == ["/a/p.png"])
+        #expect(received.first?.imagePNG == nil)
+    }
+
+    @Test func secretFilesAreNeverRead() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        var snapshot = finderCopy(["/a/secret.txt"])
+        snapshot.types.append(PrivacyFilter.concealedType)
+        source.copy(snapshot)
+        monitor.poll()
+        #expect(received.isEmpty)
+        #expect(source.textReads == 0, "concealed copies are decided from metadata only")
+    }
+
+    @Test func filesFromAnIgnoredAppAreSkipped() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter(ignoredBundleIdentifiers: ["com.example.vault"])) { received.append($0) }
+        source.copy(finderCopy(["/a/one.txt"], app: "com.example.vault"))
+        monitor.poll()
+        #expect(received.isEmpty)
+    }
+
+    @Test func tooManyFilesAreSkipped() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        source.copy(finderCopy((0...PrivacyFilter.defaultMaxFiles).map { "/a/\($0).txt" }))
+        monitor.poll()
+        #expect(received.isEmpty)
+    }
+
+    @Test func filesWrittenByPastuAreNotCapturedAgain() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        monitor.copyToPasteboard(files: [URL(fileURLWithPath: "/a/one.txt")])
+        monitor.poll()
+        #expect(received.isEmpty)
     }
 
     private func plain(_ text: String) -> PasteboardSnapshot {
