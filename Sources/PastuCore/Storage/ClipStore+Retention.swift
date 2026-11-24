@@ -42,11 +42,11 @@ extension ClipStore {
     static let indexOverheadFactor = 4.5
 
     /// Estimated on-disk size of the history: UTF-8 bytes of all clip text times `indexOverheadFactor`
-    /// (the trigram index), plus the bytes of every image (stored once, not indexed).
+    /// (the trigram index), plus the bytes of every image and every stored RTF/HTML flavour (stored once, not indexed).
     public func estimatedSizeInBytes() throws -> Int {
         let stmt = try prepare("""
             SELECT COALESCE(SUM(LENGTH(CAST(text AS BLOB)) + COALESCE(LENGTH(CAST(ocr_text AS BLOB)), 0)), 0),
-                   COALESCE(SUM(LENGTH(image)), 0) FROM clips
+                   COALESCE(SUM(COALESCE(LENGTH(image), 0) + COALESCE(LENGTH(rtf), 0) + COALESCE(LENGTH(html), 0)), 0) FROM clips
             """)
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
@@ -58,7 +58,7 @@ extension ClipStore {
         var excess = try estimatedSizeInBytes() - cap
         guard excess > 0 else { return 0 }
         let select = try prepare("""
-            SELECT id, LENGTH(CAST(text AS BLOB)) + COALESCE(LENGTH(CAST(ocr_text AS BLOB)), 0), COALESCE(LENGTH(image), 0)
+            SELECT id, LENGTH(CAST(text AS BLOB)) + COALESCE(LENGTH(CAST(ocr_text AS BLOB)), 0), COALESCE(LENGTH(image), 0) + COALESCE(LENGTH(rtf), 0) + COALESCE(LENGTH(html), 0)
             FROM clips WHERE pinned = 0 ORDER BY last_copied_at ASC, id ASC
             """)
         defer { sqlite3_finalize(select) }

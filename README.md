@@ -52,6 +52,7 @@ yourself.
 | ⌘↑ ⌘↓ / Home End | Jump to the first or last clip |
 | Page Up / Page Down | Move a page at a time |
 | ⌘1 – ⌘9 | Paste one of the first nine clips |
+| ⇧↩ | Paste with the original formatting (RTF/HTML) when the clip was copied from rich text; plain text stays the default |
 | ⌥↩ / ⌘↩ | Add the selected clip to the paste queue / paste the whole queue in order |
 | ⌘P | Pin a clip (stays on top, never deleted) |
 | ⌘⌫ | Delete a clip |

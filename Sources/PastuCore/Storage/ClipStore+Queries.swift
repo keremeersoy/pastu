@@ -13,11 +13,26 @@ extension ClipStore {
         return Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, 0)))
     }
 
+    /// The RTF/HTML stored with a text clip, or nil when it has none. Kept out of the list queries like picture bytes.
+    public func richContent(id: Int64) throws -> RichContent? {
+        let stmt = try prepare("SELECT rtf, html FROM clips WHERE id = ?1")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, id)
+        guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+        func blob(_ column: Int32) -> Data? {
+            guard let bytes = sqlite3_column_blob(stmt, column) else { return nil }
+            return Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, column)))
+        }
+        let rich = RichContent(rtf: blob(0), html: blob(1))
+        return rich.rtf == nil && rich.html == nil ? nil : rich
+    }
+
     /// Pinned first, then newest. `kind` restricts the result to text, links or images; it applies before `limit`.
     /// `offset` skips that many rows so the panel can load the list in pages.
     public func recent(limit: Int = 50, offset: Int = 0, kind: ClipKind? = nil) throws -> [StoredClip] {
         try query("""
-            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind
+            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind,
+                   (c.rtf IS NOT NULL OR c.html IS NOT NULL)
             FROM clips c
             WHERE \(Self.kindCondition(kind))
             ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1 OFFSET ?2
@@ -65,7 +80,8 @@ extension ClipStore {
         }
 
         return try self.query("""
-            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind
+            SELECT c.id, c.text, c.source_bundle_id, c.first_copied_at, c.last_copied_at, c.copy_count, c.pinned, c.kind,
+                   (c.rtf IS NOT NULL OR c.html IS NOT NULL)
             FROM \(source)
             WHERE \(conditions.joined(separator: " AND "))
             ORDER BY c.pinned DESC, c.last_copied_at DESC, c.id DESC LIMIT ?1 OFFSET ?2
@@ -101,7 +117,8 @@ extension ClipStore {
                 lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
                 copyCount: Int(sqlite3_column_int64(stmt, 5)),
                 isPinned: sqlite3_column_int64(stmt, 6) != 0,
-                kind: kind
+                kind: kind,
+                hasFormatting: sqlite3_column_int64(stmt, 8) != 0
             ))
         }
         return clips

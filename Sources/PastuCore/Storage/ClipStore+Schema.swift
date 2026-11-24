@@ -101,6 +101,17 @@ extension ClipStore {
             }
             try exec("PRAGMA user_version = 4")
         }
+        if try userVersion() < 5 {
+            // v5: formatting. Text clips keep the RTF and HTML flavours they were copied with (NULL when the source
+            // offered none), so "paste with formatting" can put them back. Never indexed or searched.
+            if !(try columnExists("rtf", in: "clips")) {
+                try exec("ALTER TABLE clips ADD COLUMN rtf BLOB")
+            }
+            if !(try columnExists("html", in: "clips")) {
+                try exec("ALTER TABLE clips ADD COLUMN html BLOB")
+            }
+            try exec("PRAGMA user_version = 5")
+        }
     }
 
     private func ftsUsesWordTokenizer() throws -> Bool {

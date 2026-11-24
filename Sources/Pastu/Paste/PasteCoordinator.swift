@@ -40,16 +40,19 @@ final class PasteCoordinator {
     /// Used by the row menu's "Copy", and as the first half of `paste(_:)`. Needs no Accessibility permission.
     /// Returns false when there was nothing to write (no database yet, or the picture's bytes are gone).
     @discardableResult
-    func copy(_ clip: StoredClip) -> Bool {
+    func copy(_ clip: StoredClip, keepFormatting: Bool = false) -> Bool {
         // Text or picture, written without Pastu recapturing its own write.
-        guard let store, let monitor, ClipPasteboardWriter.copy(clip, from: store, using: monitor) else { return false }
+        guard let store, let monitor,
+              ClipPasteboardWriter.copy(clip, from: store, using: monitor, keepFormatting: keepFormatting)
+        else { return false }
         try? store.markUsed(id: clip.id)
         return true
     }
 
-    /// Puts the clip on the pasteboard and sends ⌘V to the app the user came from.
-    func paste(_ clip: StoredClip) {
-        guard copy(clip) else { return }
+    /// Puts the clip on the pasteboard and sends ⌘V to the app the user came from. With `keepFormatting` a text clip
+    /// goes back with the RTF/HTML it was copied with; plain text is the default.
+    func paste(_ clip: StoredClip, keepFormatting: Bool = false) {
+        guard copy(clip, keepFormatting: keepFormatting) else { return }
 
         guard isTrusted() else {
             // The clip is already on the clipboard, so a manual ⌘V still works.

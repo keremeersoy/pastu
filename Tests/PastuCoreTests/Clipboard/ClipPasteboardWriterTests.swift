@@ -7,12 +7,16 @@ private final class RecordingSource: ClipboardSource {
     var changeCount = 0
     var text: String?
     var image: Data?
+    var rtf: Data?
+    var html: Data?
 
     func snapshot(includingContent: Bool) -> PasteboardSnapshot {
         PasteboardSnapshot(types: [], text: includingContent ? text : nil, imagePNG: includingContent ? image : nil)
     }
-    func write(text: String) { self.text = text; image = nil; changeCount += 1 }
-    func write(imagePNG: Data) { image = imagePNG; text = nil; changeCount += 1 }
+    func write(text: String, rtf: Data?, html: Data?) {
+        self.text = text; self.rtf = rtf; self.html = html; image = nil; changeCount += 1
+    }
+    func write(imagePNG: Data) { image = imagePNG; text = nil; rtf = nil; html = nil; changeCount += 1 }
 }
 
 @MainActor
@@ -66,6 +70,48 @@ private final class RecordingSource: ClipboardSource {
             ClipPasteboardWriter.copy(clip, from: store, using: monitor)
             monitor.poll()
         }
+        #expect(captured() == 0)
+    }
+
+    // MARK: Formatting
+
+    private func formattedClip(_ store: ClipStore) throws -> StoredClip {
+        let id = try store.insert(CapturedClip(
+            text: "hello", sourceBundleIdentifier: nil, date: Date(), rtf: Data("rtf".utf8), html: Data("html".utf8)
+        ))
+        return try #require(try store.recent().first { $0.id == id })
+    }
+
+    @Test func formattingIsLeftOutByDefault() throws {
+        let (store, source, monitor, _) = try setUp()
+        #expect(ClipPasteboardWriter.copy(try formattedClip(store), from: store, using: monitor) == true)
+        #expect(source.text == "hello")
+        #expect(source.rtf == nil)
+        #expect(source.html == nil)
+    }
+
+    @Test func formattingIsWrittenAlongsideTheTextWhenAsked() throws {
+        let (store, source, monitor, _) = try setUp()
+        let clip = try formattedClip(store)
+        #expect(ClipPasteboardWriter.copy(clip, from: store, using: monitor, keepFormatting: true) == true)
+        #expect(source.text == "hello")
+        #expect(source.rtf == Data("rtf".utf8))
+        #expect(source.html == Data("html".utf8))
+    }
+
+    @Test func keepingFormattingOfAPlainClipJustWritesText() throws {
+        let (store, source, monitor, _) = try setUp()
+        let id = try store.insert(CapturedClip(text: "plain", sourceBundleIdentifier: nil, date: Date()))
+        let clip = try #require(try store.recent().first { $0.id == id })
+        #expect(ClipPasteboardWriter.copy(clip, from: store, using: monitor, keepFormatting: true) == true)
+        #expect(source.text == "plain")
+        #expect(source.rtf == nil)
+    }
+
+    @Test func aFormattedWriteIsNeverRecaptured() throws {
+        let (store, _, monitor, captured) = try setUp()
+        ClipPasteboardWriter.copy(try formattedClip(store), from: store, using: monitor, keepFormatting: true)
+        monitor.poll()
         #expect(captured() == 0)
     }
 }

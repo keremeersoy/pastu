@@ -24,6 +24,8 @@ struct PanelView: View {
     let canAutoPaste: Bool
     var isPaused: Bool = false
     let onSubmit: () -> Void
+    /// ⇧↩ and the row menu's "Paste with Formatting": like `onSubmit`, but the clip keeps its RTF/HTML.
+    var onSubmitFormatted: () -> Void = {}
     var onIgnoreApp: () -> Void = {}
     /// The row menu's "Copy": the selected clip goes on the clipboard without ⌘V.
     var onCopyOnly: () -> Void = {}
@@ -58,11 +60,14 @@ struct PanelView: View {
                 .onKeyPress(.pageUp) { model.movePage(-1, rowsPerPage: PanelMetrics.rowsPerPage); return .handled }
                 .onKeyPress(.pageDown) { model.movePage(1, rowsPerPage: PanelMetrics.rowsPerPage); return .handled }
                 .onKeyPress(keys: [.return]) { press in
-                    // ⌥↩ collects the selected clip into the paste queue, ⌘↩ pastes the queue, ↩ pastes one clip.
+                    // ⌥↩ collects the selected clip into the paste queue, ⌘↩ pastes the queue, ⇧↩ pastes one clip
+                    // with its formatting, ↩ pastes it as plain text.
                     if press.modifiers.contains(.option) {
                         model.addSelectedToQueue()
                     } else if press.modifiers.contains(.command) {
                         pasteQueue()
+                    } else if press.modifiers.contains(.shift) {
+                        pasteFormatted()
                     } else {
                         onSubmit()
                     }
@@ -144,6 +149,16 @@ struct PanelView: View {
         .onAppear { searchFocused = true }
     }
 
+    /// ⇧↩: only clips copied with formatting have anything to keep; for the others say so instead of pasting plain text
+    /// the user did not ask for.
+    private func pasteFormatted() {
+        guard model.selectedClip?.hasFormatting == true else {
+            model.notice = "This clip has no formatting. Press ↩ to paste it"
+            return
+        }
+        onSubmitFormatted()
+    }
+
     private func pasteQueue() {
         guard !model.queue.isEmpty else {
             model.notice = "The queue is empty. Add clips with ⌥↩"
@@ -164,6 +179,9 @@ struct PanelView: View {
     @ViewBuilder
     private func rowMenu(for clip: StoredClip) -> some View {
         Button("Paste") { act(on: clip, onSubmit) }
+        if clip.hasFormatting {
+            Button("Paste with Formatting") { act(on: clip, onSubmitFormatted) }
+        }
         Button("Copy") { act(on: clip, onCopyOnly) }
         if clip.kind == .image {
             Button("Open in Preview") { act(on: clip) { PreviewOpener.shared.open(clip, imageData: imageData) } }
