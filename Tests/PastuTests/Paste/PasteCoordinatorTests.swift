@@ -142,4 +142,57 @@ import Testing
         await rig.coordinator.pasteQueue(plan, startDelay: .zero, stepDelay: .zero)
         #expect(try rig.store.recent().map(\.text) == ["b", "a"])
     }
+
+    // MARK: Formatting
+
+    @Test func pastingWithFormattingPutsTheStoredFormattingOnThePasteboard() async throws {
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        defer { raw.releaseGlobally() }
+        let store = try ClipStore()
+        let rtf = Data("{\\rtf1 hi}".utf8), html = Data("<b>hi</b>".utf8)
+        let id = try store.insert(CapturedClip(text: "styled", sourceBundleIdentifier: nil, date: Date(), rtf: rtf, html: html))
+        let clip = try #require(try store.recent().first { $0.id == id })
+        let coordinator = PasteCoordinator(sendPaste: {}, isTrusted: { true }, isPastuActive: { false }, hidePastu: {})
+        coordinator.store = store
+        coordinator.monitor = ClipboardMonitor(source: SystemPasteboard(pasteboard: raw), filter: PrivacyFilter()) { _ in }
+
+        coordinator.copy(clip, keepFormatting: true)
+        #expect(raw.string(forType: .string) == "styled")
+        #expect(raw.data(forType: .rtf) == rtf)
+        #expect(raw.data(forType: .html) == html)
+    }
+
+    @Test func aPlainPasteLeavesTheFormattingBehind() async throws {
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        defer { raw.releaseGlobally() }
+        let store = try ClipStore()
+        let id = try store.insert(CapturedClip(text: "styled", sourceBundleIdentifier: nil, date: Date(), rtf: Data("{\\rtf1 hi}".utf8)))
+        let clip = try #require(try store.recent().first { $0.id == id })
+        let coordinator = PasteCoordinator(sendPaste: {}, isTrusted: { true }, isPastuActive: { false }, hidePastu: {})
+        coordinator.store = store
+        coordinator.monitor = ClipboardMonitor(source: SystemPasteboard(pasteboard: raw), filter: PrivacyFilter()) { _ in }
+
+        coordinator.copy(clip)
+        #expect(raw.string(forType: .string) == "styled")
+        #expect(raw.data(forType: .rtf) == nil)
+    }
+
+    @Test func theFormattedPasteSendsCommandVAfterWritingTheFormatting() async throws {
+        let raw = NSPasteboard(name: .init("pastu.test.\(UUID())"))
+        defer { raw.releaseGlobally() }
+        let store = try ClipStore()
+        let rtf = Data("{\\rtf1 hi}".utf8)
+        let id = try store.insert(CapturedClip(text: "styled", sourceBundleIdentifier: nil, date: Date(), rtf: rtf))
+        let clip = try #require(try store.recent().first { $0.id == id })
+        var seenAtPaste: Data?
+        let coordinator = PasteCoordinator(
+            sendPaste: { seenAtPaste = raw.data(forType: .rtf) }, isTrusted: { true }, isPastuActive: { false }, hidePastu: {}
+        )
+        coordinator.store = store
+        coordinator.monitor = ClipboardMonitor(source: SystemPasteboard(pasteboard: raw), filter: PrivacyFilter()) { _ in }
+
+        coordinator.paste(clip, keepFormatting: true)
+        for _ in 0..<50 where seenAtPaste == nil { try? await Task.sleep(for: .milliseconds(20)) }
+        #expect(seenAtPaste == rtf)
+    }
 }

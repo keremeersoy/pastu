@@ -6,6 +6,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Paste with formatting: ⇧↩ (or "Paste with Formatting" in the row menu) pastes a text clip with the RTF/HTML formatting it was copied with; ↩ still pastes plain text. Formatting is stored per clip (at most 2 MB per flavour, never searched) and survives an undone delete. Thanks to @sethmfuller.
+
 ### Changed
 - A closed panel releases its views instead of keeping them until the next open, about 14 MB less memory while idle.
 

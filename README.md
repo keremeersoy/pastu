@@ -52,7 +52,7 @@ yourself.
 | ⌘↑ ⌘↓ / Home End | Jump to the first or last clip |
 | Page Up / Page Down | Move a page at a time |
 | ⌘1 – ⌘9 | Paste one of the first nine clips |
-| ⇧↩ | Paste with the original formatting (RTF/HTML) when the clip was copied from rich text; plain text stays the default |
+| ⇧↩ | Paste with the original formatting when the clip was copied from rich text (↩ pastes plain text) |
 | ⌥↩ / ⌘↩ | Add the selected clip to the paste queue / paste the whole queue in order |
 | ⌘P | Pin a clip (stays on top, never deleted) |
 | ⌘⌫ | Delete a clip |
@@ -78,7 +78,8 @@ The menu bar icon lets you pause recording, clear the history, manage ignored ap
 - **You decide what is recorded.** Ignore any app with ⌘I, or pause recording from the menu bar.
 - **Old clips go away.** By default Pastu keeps up to 5,000 clips for 90 days (pinned clips stay); change the limits in Settings.
 - **Good to know:** the history is saved on your disk without encryption. Only your user account can open the file,
-  but apps running under your account could read it. Copied screenshots are saved too. Delete anything sensitive
+  but apps running under your account could read it. Copied screenshots are saved too, and so is the formatting
+  (RTF/HTML, up to 2 MB per clip) of text copied from rich text, so ⇧↩ can paste it back. Delete anything sensitive
   with ⌘⌫.
 
 ## Good to know
@@ -88,7 +89,7 @@ The menu bar icon lets you pause recording, clear the history, manage ignored ap
   Solid (also under Settings…). Reduce Transparency in System Settings always gives a solid background.
 - Search also finds the words inside screenshots and pictures (read on your Mac with Apple's text recognition, switch
   it off in Settings…).
-- Text and pictures are supported, and colour codes like `#1e90ff` show a swatch. Files and rich text are not yet.
+- Text and pictures are supported, and colour codes like `#1e90ff` show a swatch. Files are not yet.
 - The screenshots above show the panel's layout with sample data. On macOS 26 the real panel has a
   Liquid Glass background.
 - Some things have not been tested by hand yet, such as multiple displays and full-screen apps.

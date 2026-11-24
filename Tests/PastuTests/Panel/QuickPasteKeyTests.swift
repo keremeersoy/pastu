@@ -222,12 +222,15 @@ extension ShellTests {
     }
     // MARK: Paste queue
 
-    private func queuePanel(_ model: ClipListModel, onSubmit: @escaping () -> Void = {}, onPasteQueue: @escaping () -> Void = {}) async throws -> ClipPanel {
+    private func queuePanel(
+        _ model: ClipListModel, onSubmit: @escaping () -> Void = {}, onSubmitFormatted: @escaping () -> Void = {},
+        onPasteQueue: @escaping () -> Void = {}
+    ) async throws -> ClipPanel {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
         let panel = ClipPanel(size: NSSize(width: 780, height: 460))
         panel.contentView = NSHostingView(rootView: PanelView(
-            model: model, canAutoPaste: true, onSubmit: onSubmit, onPasteQueue: onPasteQueue
+            model: model, canAutoPaste: true, onSubmit: onSubmit, onSubmitFormatted: onSubmitFormatted, onPasteQueue: onPasteQueue
         ))
         panel.makeKeyAndOrderFront(nil)
         await pump()
@@ -306,6 +309,84 @@ extension ShellTests {
         let clear = try #require(accessibilityElement(containing: "Clear queue", in: content))
         #expect(accessibilityPress(clear))
         #expect(model.queue.isEmpty)
+    }
+
+    // MARK: Paste with formatting
+
+    /// Newest first: "formatted" (with RTF), then "plain".
+    private func formattingModel() throws -> ClipListModel {
+        let store = try ClipStore()
+        try store.insert(CapturedClip(text: "plain", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 1)))
+        try store.insert(CapturedClip(
+            text: "formatted", sourceBundleIdentifier: nil, date: Date(timeIntervalSince1970: 2), rtf: Data("{\\rtf1 hi}".utf8)
+        ))
+        return ClipListModel(store: store)
+    }
+
+    @Test func shiftReturnPastesAFormattedClipWithItsFormatting() async throws {
+        let model = try formattingModel()
+        var plain = 0, formatted = 0
+        let panel = try await queuePanel(model, onSubmit: { plain += 1 }, onSubmitFormatted: { formatted += 1 })
+        defer { panel.orderOut(nil) }
+        #expect(model.selectedClip?.text == "formatted")
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: .shift, window: panel))
+        await pump(0.2)
+        #expect(formatted == 1)
+        #expect(plain == 0)
+    }
+
+    @Test func shiftReturnOnAPlainClipSaysSoAndPastesNothing() async throws {
+        let model = try formattingModel()
+        model.moveSelection(by: 1)   // "plain"
+        var plain = 0, formatted = 0
+        let panel = try await queuePanel(model, onSubmit: { plain += 1 }, onSubmitFormatted: { formatted += 1 })
+        defer { panel.orderOut(nil) }
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: .shift, window: panel))
+        await pump(0.2)
+        #expect(formatted == 0)
+        #expect(plain == 0)
+        #expect(model.notice == "This clip has no formatting. Press ↩ to paste it")
+    }
+
+    @Test func plainReturnStillPastesAFormattedClipAsPlainText() async throws {
+        let model = try formattingModel()
+        var plain = 0, formatted = 0
+        let panel = try await queuePanel(model, onSubmit: { plain += 1 }, onSubmitFormatted: { formatted += 1 })
+        defer { panel.orderOut(nil) }
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: [], window: panel))
+        await pump(0.2)
+        #expect(plain == 1)
+        #expect(formatted == 0)
+    }
+
+    @Test func theControllerHandsAFormattedClipToTheFormattedCallbackOnly() async throws {
+        let model = try formattingModel()
+        var plain: [String] = [], formatted: [String] = []
+        let controller = PanelController(
+            model: model, canAutoPaste: { true }, onSelectFormatted: { formatted.append($0.text) }
+        ) { plain.append($0.text) }
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        NSApp.sendEvent(keyEvent("\r", keyCode: 36, modifiers: .shift, window: controller.panel))
+        await pump(0.2)
+        #expect(formatted == ["formatted"])
+        #expect(plain.isEmpty)
+        #expect(!controller.isVisible, "pasting closes the panel")
+    }
+
+    @Test func theRowMenuOffersFormattingOnlyForFormattedClips() async throws {
+        let model = try formattingModel()
+        let controller = PanelController(model: model, canAutoPaste: { true }) { _ in }
+        controller.show()
+        defer { controller.hide() }
+        try #require(await searchFieldHasFocus(controller.panel))
+        enableAccessibilityTree()
+        await pump(0.3)
+        let formattedMenu = try contextMenu(onRow: 0, in: controller.panel)
+        #expect(titles(formattedMenu).contains("Paste with Formatting"))
+        let plainMenu = try contextMenu(onRow: 1, in: controller.panel)
+        #expect(!titles(plainMenu).contains("Paste with Formatting"))
     }
 
     // MARK: Memory
