@@ -49,19 +49,19 @@ closed before reading it. The script reads only numbers about the process, never
 
 ### Results
 
-A Pastu that had been running for more than a day on a real history, after reading the text in the old pictures
-(see below) and after the panel had been opened many times, on the same Mac:
+On the same Mac, with a real history, in two situations:
 
-| | |
-|---|---|
-| Physical footprint, idle | 104 MB |
-| Physical footprint, peak since launch | 163 MB |
-| Resident set size | 162 MB |
+| | Physical footprint | Resident set size |
+|---|---|---|
+| Freshly launched, idle (6 s and 66 s after launch) | 15 MB, 14 MB | 75 MB, 72 MB |
+| Running for more than a day, panel opened many times, pictures read | 104 MB (peak 163 MB) | 162 MB |
 
-That is more than a menu bar utility should need. Most of it is small heap allocations (67 MB) rather than pictures
-(Image IO and IOSurface together are about 15 MB). Reading the text in pictures loads Apple's recognition models, and the
-peak is likely from that catch-up pass; whether the models stay resident afterwards has not been verified. This is the
-next thing to look at if idle memory matters: measure a fresh launch with "Find text in pictures" switched off, then on.
+A fresh Pastu is small. The long-running one grew to about seven times that, mostly in small heap allocations
+(67 MB) rather than pictures (Image IO and IOSurface together are about 15 MB). Reading the text in pictures loads
+Apple's recognition models, and opening the panel fills the thumbnail and preview caches, so the growth comes from
+use. Which of them stays resident has not been verified; issue #15 tracks it. To find out: use a fresh launch as the
+baseline, then measure again after the panel was opened a few hundred times, and after a text-recognition pass with
+"Find text in pictures" switched on versus off.
 
 ## Picture thumbnails
 
