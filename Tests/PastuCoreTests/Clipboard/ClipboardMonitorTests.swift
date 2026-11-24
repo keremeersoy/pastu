@@ -44,6 +44,30 @@ private final class FakeSource: ClipboardSource {
         #expect(received.first?.html == Data("h".utf8))
     }
 
+    /// A web page copied from a browser can carry megabytes of HTML. The text is kept either way; only the formatting
+    /// that is too big to be worth keeping is dropped.
+    @Test func formattingAboveTheLimitIsDroppedButTheTextIsKept() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        let big = Data(repeating: 0x41, count: ClipboardMonitor.maxFormattingBytes + 1)
+        source.copy(PasteboardSnapshot(types: [], text: "hi", rtf: big, html: Data("h".utf8)))
+        monitor.poll()
+        #expect(received.first?.text == "hi")
+        #expect(received.first?.rtf == nil)
+        #expect(received.first?.html == Data("h".utf8), "the small flavour stays")
+    }
+
+    @Test func formattingExactlyAtTheLimitIsKept() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+        let exact = Data(repeating: 0x41, count: ClipboardMonitor.maxFormattingBytes)
+        source.copy(PasteboardSnapshot(types: [], text: "hi", rtf: exact, html: nil))
+        monitor.poll()
+        #expect(received.first?.rtf == exact)
+    }
+
     private func plain(_ text: String) -> PasteboardSnapshot {
         PasteboardSnapshot(types: ["public.utf8-plain-text"], text: text)
     }

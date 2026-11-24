@@ -13,13 +13,15 @@ public struct ClipSnapshot: Sendable {
     let isImage: Bool
     let imagePNG: Data?
     let ocrText: String?
+    let rtf: Data?
+    let html: Data?
 }
 
 extension ClipStore {
     /// Reads one clip completely (picture bytes included), or nil when it does not exist.
     public func snapshot(id: Int64) throws -> ClipSnapshot? {
         let stmt = try prepare("""
-            SELECT text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image, ocr_text
+            SELECT text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image, ocr_text, rtf, html
             FROM clips WHERE id = ?1
             """)
         defer { sqlite3_finalize(stmt) }
@@ -28,7 +30,10 @@ extension ClipStore {
         func string(_ column: Int32) -> String? {
             sqlite3_column_text(stmt, column).map { String(cString: $0) }
         }
-        let image: Data? = sqlite3_column_blob(stmt, 7).map { Data(bytes: $0, count: Int(sqlite3_column_bytes(stmt, 7))) }
+        func blob(_ column: Int32) -> Data? {
+            sqlite3_column_blob(stmt, column).map { Data(bytes: $0, count: Int(sqlite3_column_bytes(stmt, column))) }
+        }
+        let image = blob(7)
         return ClipSnapshot(
             text: string(0) ?? "",
             sourceBundleIdentifier: string(1),
@@ -38,7 +43,9 @@ extension ClipStore {
             isPinned: sqlite3_column_int64(stmt, 5) != 0,
             isImage: string(6) == "image",
             imagePNG: image,
-            ocrText: string(8)
+            ocrText: string(8),
+            rtf: blob(9),
+            html: blob(10)
         )
     }
 
@@ -48,8 +55,8 @@ extension ClipStore {
     public func restore(_ clip: ClipSnapshot) throws -> Int64 {
         let insert = try prepare("""
             INSERT OR IGNORE INTO clips
-                (text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image, ocr_text)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                (text, source_bundle_id, first_copied_at, last_copied_at, copy_count, pinned, kind, image, ocr_text, rtf, html)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             """)
         defer { sqlite3_finalize(insert) }
         bind(clip.text, at: 1, in: insert)
@@ -61,6 +68,8 @@ extension ClipStore {
         bind(clip.isImage ? "image" : "text", at: 7, in: insert)
         bind(blob: clip.imagePNG, at: 8, in: insert)
         bind(clip.ocrText, at: 9, in: insert)
+        bind(blob: clip.rtf, at: 10, in: insert)
+        bind(blob: clip.html, at: 11, in: insert)
         guard sqlite3_step(insert) == SQLITE_DONE else { throw lastError() }
 
         let select = try prepare("SELECT id FROM clips WHERE text = ?1")

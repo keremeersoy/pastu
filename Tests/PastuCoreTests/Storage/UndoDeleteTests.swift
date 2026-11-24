@@ -73,6 +73,26 @@ import Testing
         #expect(try store.recent().count == 1)
     }
 
+    @Test func anUndoneDeleteKeepsTheFormatting() throws {
+        let store = try ClipStore()
+        let rtf = Data("{\\rtf1 hi}".utf8), html = Data("<b>hi</b>".utf8)
+        let id = try store.insert(CapturedClip(text: "styled", sourceBundleIdentifier: nil, date: Date(), rtf: rtf, html: html))
+        let snapshot = try #require(try store.snapshot(id: id))
+        try store.delete(id: id)
+        let back = try store.restore(snapshot)
+        #expect(try store.richContent(id: back) == RichContent(rtf: rtf, html: html))
+        #expect(try store.recent().first { $0.id == back }?.hasFormatting == true)
+    }
+
+    @Test func aPlainClipStaysPlainAfterAnUndoneDelete() throws {
+        let store = try ClipStore()
+        let id = try store.insert(CapturedClip(text: "plain", sourceBundleIdentifier: nil, date: Date()))
+        let snapshot = try #require(try store.snapshot(id: id))
+        try store.delete(id: id)
+        let back = try store.restore(snapshot)
+        #expect(try store.richContent(id: back) == nil)
+    }
+
     // MARK: Model
 
     @Test func undoRestoresTheLastDeletedClipAndSelectsIt() throws {

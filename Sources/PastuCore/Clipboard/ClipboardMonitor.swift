@@ -85,6 +85,15 @@ public final class ClipboardMonitor {
         timer = nil
     }
 
+    /// Each stored formatting flavour (RTF, HTML) may be at most this big. A page copied from a browser can carry
+    /// megabytes of markup; the text is kept, the formatting that large is not.
+    public static let maxFormattingBytes = 2 * 1024 * 1024
+
+    private static func withinFormattingLimit(_ data: Data?) -> Data? {
+        guard let data, data.count <= maxFormattingBytes else { return nil }
+        return data
+    }
+
     /// Puts text on the pasteboard without Pastu capturing its own write
     /// (otherwise every paste from the panel would be recorded as a new copy).
     public func copyToPasteboard(_ text: String, rtf: Data? = nil, html: Data? = nil) {
@@ -115,7 +124,7 @@ public final class ClipboardMonitor {
         if let text = snapshot.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             onCapture(CapturedClip(
                 text: text, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date(),
-                rtf: snapshot.rtf, html: snapshot.html
+                rtf: Self.withinFormattingLimit(snapshot.rtf), html: Self.withinFormattingLimit(snapshot.html)
             ))
         } else if let png = snapshot.imagePNG {
             onCapture(.image(png: png, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date()))
