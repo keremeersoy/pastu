@@ -54,14 +54,14 @@ jobs:
         shell: bash   # -eo pipefail, so a failing `swift test` is not hidden by `tee`
         run: |
           swift test 2>&1 | tee swift-test.log
-          # Same check as in ci.yml, see the comment there: every started run passed, at least 330 tests.
+          # Same check as in ci.yml, see the comment there: every started run passed, at least 420 tests.
           summary='Test run with [0-9]+ tests? in [0-9]+ suites? passed'
           started="$(grep -c 'Test run started' swift-test.log || true)"
           runs="$(grep -cE "$summary" swift-test.log || true)"
           total="$({ grep -oE "$summary" swift-test.log || true; } | awk '{ n += $4 } END { print n + 0 }')"
           echo "Swift Testing: $started runs started, $runs passed, $total tests"
-          if [ "$runs" -lt 1 ] || [ "$runs" -ne "$started" ] || [ "$total" -lt 330 ]; then
-            echo "::error::Expected every started Swift Testing run to pass, with at least 330 tests in total"; exit 1
+          if [ "$runs" -lt 1 ] || [ "$runs" -ne "$started" ] || [ "$total" -lt 420 ]; then
+            echo "::error::Expected every started Swift Testing run to pass, with at least 420 tests in total"; exit 1
           fi
       - name: Build app bundle (ad-hoc signed)
         run: VERSION="${{ steps.version.outputs.version }}" ./scripts/build-app.sh
