@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-24
+
 ### Added
 - File clips: files copied in Finder are recorded as their own kind of clip. The list shows Finder's icon and the names, the preview lists every file with its folder (missing files are marked), search finds files by name, a new "Files" filter joins Tab, and ↩ pastes the files back (the ones that still exist). Only the paths are stored, never the contents. Row menu: Show in Finder. Dragging a single file out works; several files drag as their paths.
 - Paste with formatting: ⇧↩ (or "Paste with Formatting" in the row menu) pastes a text clip with the RTF/HTML formatting it was copied with; ↩ still pastes plain text. Formatting is stored per clip (at most 2 MB per flavour, never searched) and survives an undone delete. Thanks to @sethmfuller.
@@ -123,7 +125,8 @@ Tagged but never released: the release build stopped on the flaky test fixed in 
 - Text containing NUL characters is stored whole instead of being truncated (which could merge different clips).
 - Deleted and pruned clips are overwritten in the database file (`secure_delete`).
 
-[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/keremeersoy/pastu/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/keremeersoy/pastu/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/keremeersoy/pastu/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/keremeersoy/pastu/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/keremeersoy/pastu/compare/v0.3.0...v0.4.0
