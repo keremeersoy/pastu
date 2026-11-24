@@ -19,10 +19,12 @@ public final class SystemPasteboard: ClipboardSource {
         return false
     }
 
-    /// Replaces the clipboard with plain text (pasting from the panel is always plain text).
-    public func write(text: String) {
+    /// Replaces the clipboard with text. Pasting from the panel is plain text unless the caller passes formatting.
+    public func write(text: String, rtf: Data?, html: Data?) {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+        if let rtf { pasteboard.setData(rtf, forType: .rtf) }
+        if let html { pasteboard.setData(html, forType: .html) }
     }
 
     /// Writes the picture as PNG. Older apps that ask for TIFF still get one: the system converts on demand.
@@ -36,15 +38,24 @@ public final class SystemPasteboard: ClipboardSource {
     public func snapshot(includingContent: Bool) -> PasteboardSnapshot {
         var text: String?
         var imagePNG: Data?
+        var rtf: Data?
+        var html: Data?
         if includingContent {
             text = pasteboard.string(forType: .string)
-            if text?.isEmpty ?? true { imagePNG = readPicture() }
+            if text?.isEmpty ?? true {
+                imagePNG = readPicture()
+            } else {
+                rtf = pasteboard.data(forType: .rtf)
+                html = pasteboard.data(forType: .html)
+            }
         }
         return PasteboardSnapshot(
             types: (pasteboard.types ?? []).map(\.rawValue),
             text: text,
             sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
-            imagePNG: imagePNG
+            imagePNG: imagePNG,
+            rtf: rtf,
+            html: html
         )
     }
 

@@ -5,6 +5,7 @@ import SwiftUI
 struct ShortcutsOverlay: View {
     private static let rows: [(keys: String, action: String)] = [
         ("↩", "Paste"),
+        ("⇧↩", "Paste with formatting"),
         ("⌘1–9", "Paste row"),
         ("⌥↩", "Add to queue"),
         ("⌘↩", "Paste queue"),

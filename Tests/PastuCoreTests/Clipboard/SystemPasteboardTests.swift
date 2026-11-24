@@ -69,6 +69,37 @@ import Testing
         return (SystemPasteboard(pasteboard: raw), raw)
     }
 
+    @Test func formattedTextRoundTrips() {
+        let (system, raw) = makePasteboard()
+        defer { raw.releaseGlobally() }
+        let rtf = Data("{\\rtf1 hi}".utf8), html = Data("<b>hi</b>".utf8)
+
+        system.write(text: "hi", rtf: rtf, html: html)
+        let snapshot = system.snapshot(includingContent: true)
+        #expect(snapshot.text == "hi")
+        #expect(snapshot.rtf == rtf)
+        #expect(snapshot.html == html)
+    }
+
+    @Test func plainWritesCarryNoFormatting() {
+        let (system, raw) = makePasteboard()
+        defer { raw.releaseGlobally() }
+        system.write(text: "hi", rtf: Data("x".utf8), html: nil)
+        system.write(text: "plain")
+        let snapshot = system.snapshot(includingContent: true)
+        #expect(snapshot.rtf == nil)
+        #expect(snapshot.html == nil)
+    }
+
+    @Test func aMetadataOnlySnapshotDoesNotReadFormatting() {
+        let (system, raw) = makePasteboard()
+        defer { raw.releaseGlobally() }
+        system.write(text: "hi", rtf: Data("x".utf8), html: Data("y".utf8))
+        let snapshot = system.snapshot(includingContent: false)
+        #expect(snapshot.rtf == nil)
+        #expect(snapshot.html == nil)
+    }
+
     @Test func aPictureRoundTrips() {
         let (system, raw) = makePasteboard()
         defer { raw.releaseGlobally() }

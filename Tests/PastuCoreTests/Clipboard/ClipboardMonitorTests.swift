@@ -26,13 +26,24 @@ private final class FakeSource: ClipboardSource {
         copy(PasteboardSnapshot(types: ["public.png"], text: nil, imagePNG: imagePNG))
     }
 
-    func write(text: String) {
-        copy(PasteboardSnapshot(types: ["public.utf8-plain-text"], text: text))
+    func write(text: String, rtf: Data?, html: Data?) {
+        copy(PasteboardSnapshot(types: ["public.utf8-plain-text"], text: text, rtf: rtf, html: html))
     }
 }
 
 @MainActor
 @Suite struct ClipboardMonitorTests {
+    @Test func capturesFormattingAlongsideTheText() {
+        let source = FakeSource()
+        var received: [CapturedClip] = []
+        let monitor = ClipboardMonitor(source: source, filter: PrivacyFilter()) { received.append($0) }
+
+        source.copy(PasteboardSnapshot(types: [], text: "hi", rtf: Data("r".utf8), html: Data("h".utf8)))
+        monitor.poll()
+        #expect(received.first?.rtf == Data("r".utf8))
+        #expect(received.first?.html == Data("h".utf8))
+    }
+
     private func plain(_ text: String) -> PasteboardSnapshot {
         PasteboardSnapshot(types: ["public.utf8-plain-text"], text: text)
     }

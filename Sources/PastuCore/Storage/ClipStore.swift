@@ -12,6 +12,14 @@ public struct StoredClip: Equatable, Sendable {
     public let isPinned: Bool
     /// `.image` for pictures; for text clips computed from the text (text or link).
     public let kind: ClipKind
+    /// True when the clip was copied with RTF or HTML formatting that can be pasted back.
+    public internal(set) var hasFormatting: Bool = false
+}
+
+/// The formatting stored with a text clip.
+public struct RichContent: Equatable, Sendable {
+    public let rtf: Data?
+    public let html: Data?
 }
 
 /// How much history to keep. `nil` means "no limit" for that dimension.
@@ -68,12 +76,14 @@ public final class ClipStore {
     @discardableResult
     public func insert(_ clip: CapturedClip) throws -> Int64 {
         let stmt = try prepare("""
-            INSERT INTO clips (text, source_bundle_id, first_copied_at, last_copied_at, kind, image)
-            VALUES (?1, ?2, ?3, ?3, ?4, ?5)
+            INSERT INTO clips (text, source_bundle_id, first_copied_at, last_copied_at, kind, image, rtf, html)
+            VALUES (?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT(text) DO UPDATE SET
                 last_copied_at = excluded.last_copied_at,
                 copy_count = copy_count + 1,
-                source_bundle_id = COALESCE(excluded.source_bundle_id, source_bundle_id)
+                source_bundle_id = COALESCE(excluded.source_bundle_id, source_bundle_id),
+                rtf = CASE WHEN excluded.rtf IS NOT NULL OR excluded.html IS NOT NULL THEN excluded.rtf ELSE rtf END,
+                html = CASE WHEN excluded.rtf IS NOT NULL OR excluded.html IS NOT NULL THEN excluded.html ELSE html END
             RETURNING id
             """)
         defer { sqlite3_finalize(stmt) }
@@ -82,6 +92,8 @@ public final class ClipStore {
         sqlite3_bind_double(stmt, 3, clip.date.timeIntervalSince1970)
         bind(clip.imagePNG == nil ? "text" : "image", at: 4, in: stmt)
         bind(blob: clip.imagePNG, at: 5, in: stmt)
+        bind(blob: clip.rtf, at: 6, in: stmt)
+        bind(blob: clip.html, at: 7, in: stmt)
         guard sqlite3_step(stmt) == SQLITE_ROW else { throw lastError() }
         let id = sqlite3_column_int64(stmt, 0)
         // Drain so the statement completes before finalize.

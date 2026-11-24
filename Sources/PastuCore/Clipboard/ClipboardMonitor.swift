@@ -7,10 +7,15 @@ public protocol ClipboardSource: AnyObject {
     var changeCount: Int { get }
     /// With `includingContent: false` only metadata (types, source app) is read, never the content.
     func snapshot(includingContent: Bool) -> PasteboardSnapshot
-    /// Replaces the pasteboard contents with plain text.
-    func write(text: String)
+    /// Replaces the pasteboard contents with text, plus its RTF/HTML formatting when given.
+    func write(text: String, rtf: Data?, html: Data?)
     /// Replaces the pasteboard contents with a picture.
     func write(imagePNG: Data)
+}
+
+extension ClipboardSource {
+    /// Replaces the pasteboard contents with plain text.
+    func write(text: String) { write(text: text, rtf: nil, html: nil) }
 }
 
 /// A copy that passed the privacy filter.
@@ -22,6 +27,9 @@ public struct CapturedClip: Equatable, Sendable {
     public let date: Date
     /// PNG data when the clip is an image, otherwise nil.
     public var imagePNG: Data? = nil
+    /// The copied text's RTF and HTML flavours when the source app offered them, otherwise nil.
+    public var rtf: Data? = nil
+    public var html: Data? = nil
 
     /// An image clip, keyed by a hash of its bytes so the same picture copied twice merges into one row.
     static func image(png: Data, sourceBundleIdentifier: String? = nil, date: Date = Date()) -> CapturedClip {
@@ -79,8 +87,8 @@ public final class ClipboardMonitor {
 
     /// Puts text on the pasteboard without Pastu capturing its own write
     /// (otherwise every paste from the panel would be recorded as a new copy).
-    public func copyToPasteboard(_ text: String) {
-        source.write(text: text)
+    public func copyToPasteboard(_ text: String, rtf: Data? = nil, html: Data? = nil) {
+        source.write(text: text, rtf: rtf, html: html)
         lastChangeCount = source.changeCount
     }
 
@@ -105,7 +113,10 @@ public final class ClipboardMonitor {
         guard filter.decision(for: snapshot) == .record else { return }
 
         if let text = snapshot.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            onCapture(CapturedClip(text: text, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date()))
+            onCapture(CapturedClip(
+                text: text, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date(),
+                rtf: snapshot.rtf, html: snapshot.html
+            ))
         } else if let png = snapshot.imagePNG {
             onCapture(.image(png: png, sourceBundleIdentifier: snapshot.sourceBundleIdentifier, date: Date()))
         }

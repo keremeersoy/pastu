@@ -96,7 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             queueSettings: settings.queue,
             onPasteQueue: { [weak self] steps in
                 Task { @MainActor in await self?.pasteCoordinator.pasteQueue(steps) }
-            }
+            },
+            onSelectFormatted: { [weak self] clip in self?.pasteCoordinator.paste(clip, keepFormatting: true) }
         ) { [weak self] clip in
             self?.pasteCoordinator.paste(clip)
         }

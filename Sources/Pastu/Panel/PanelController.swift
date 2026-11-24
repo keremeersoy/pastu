@@ -9,6 +9,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private let model: ClipListModel
     private let onSelect: (StoredClip) -> Void
+    private let onSelectFormatted: (StoredClip) -> Void
     private let canAutoPaste: () -> Bool
     private let ignoredApps: IgnoredApps
     private let imageData: (Int64) -> Data?
@@ -28,6 +29,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     var isVisible: Bool { panel.isVisible }
 
     /// - Parameter onSelect: called after the panel closed, with the clip the user picked.
+    /// - Parameter onSelectFormatted: ⇧↩ and the row menu's "Paste with Formatting"; like `onSelect`, keeping RTF/HTML.
     /// - Parameter canAutoPaste: whether Pastu may send ⌘V (Accessibility permission); a banner says so if not.
     /// - Parameter isPaused: whether recording is paused; read each time the panel opens.
     /// - Parameter onResume: the paused banner's "Resume" button.
@@ -46,6 +48,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         theme: ThemeSettings = ThemeSettings(),
         queueSettings: QueueSettings = QueueSettings(),
         onPasteQueue: @escaping ([(clip: StoredClip, suffix: String)]) -> Void = { _ in },
+        onSelectFormatted: @escaping (StoredClip) -> Void = { _ in },
         onSelect: @escaping (StoredClip) -> Void
     ) {
         self.model = model
@@ -60,6 +63,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         self.queueSettings = queueSettings
         self.onPasteQueue = onPasteQueue
         self.onSelect = onSelect
+        self.onSelectFormatted = onSelectFormatted
         super.init()
         panel.delegate = self
         panel.onCancel = { [weak self] in
@@ -103,6 +107,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             canAutoPaste: canAutoPaste(),
             isPaused: isPaused(),
             onSubmit: { [weak self] in self?.submit() },
+            onSubmitFormatted: { [weak self] in self?.submit(keepFormatting: true) },
             onIgnoreApp: { [weak self] in self?.ignoreSelectedApp() },
             onCopyOnly: { [weak self] in self?.copySelected() },
             onPasteQueue: { [weak self] in self?.submitQueue() },
@@ -153,10 +158,10 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     /// Closes the panel, then hands the selected clip over (so focus is back in the previous app).
-    private func submit() {
+    private func submit(keepFormatting: Bool = false) {
         let clip = model.selectedClip
         hide()
-        if let clip { onSelect(clip) }
+        if let clip { keepFormatting ? onSelectFormatted(clip) : onSelect(clip) }
     }
 
     /// ⌘↩: closes the panel, then pastes the queued clips in order. The queue is emptied: it was used.
