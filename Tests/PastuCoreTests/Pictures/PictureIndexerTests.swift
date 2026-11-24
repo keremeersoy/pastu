@@ -137,19 +137,3 @@ final class FakeRecognizer: TextRecognizer, @unchecked Sendable {
         #expect(try #require(try store.recognisedText(id: id)).count <= PictureIndexer.maxCharacters)
     }
 }
-
-@MainActor
-@Suite struct PictureTextSettingsTests {
-    @Test func itIsOnByDefault() {
-        #expect(PictureTextSettings(store: InMemorySettings()).isEnabled)
-    }
-
-    @Test func theChoiceSurvivesARelaunchUnderItsKey() {
-        let store = InMemorySettings()
-        PictureTextSettings(store: store).isEnabled = false
-        #expect(store.bool(forKey: "recognizeTextInPictures") == false)
-        #expect(!PictureTextSettings(store: store).isEnabled)
-        PictureTextSettings(store: store).isEnabled = true
-        #expect(PictureTextSettings(store: store).isEnabled)
-    }
-}

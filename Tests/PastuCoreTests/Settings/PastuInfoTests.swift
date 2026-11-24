@@ -9,8 +9,11 @@ import Testing
 /// The identity lives in two places (the app's Info.plist and `PastuInfo`); they must never drift apart.
 @Suite struct BundleIdentityTests {
     private func infoPlist() throws -> [String: Any] {
-        // Tests/PastuCoreTests/<this file> -> repository root
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        // Walk up from this file to the repository root (the folder with Package.swift), however deep it sits.
+        var root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while !FileManager.default.fileExists(atPath: root.appendingPathComponent("Package.swift").path), root.path != "/" {
+            root = root.deletingLastPathComponent()
+        }
         let data = try Data(contentsOf: root.appendingPathComponent("Resources/Info.plist"))
         return try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
     }
